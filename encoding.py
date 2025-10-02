@@ -1,8 +1,8 @@
 import numpy as np
-from gensim import downloader as api
+# from gensim import downloader as api  # Commented out to avoid dependency issues
 
 class Encoding:
-    def __init__(self, sentences, embeddingDim=16, usePretrained=True):
+    def __init__(self, sentences, embeddingDim=16, usePretrained=False):  # Default to False
         self.sentences = [sentence.split() for sentence in sentences]
         self.embeddingDim = embeddingDim
         self.usePretrained = usePretrained
@@ -24,7 +24,9 @@ class Encoding:
 
     def _loadModel(self):
         if self.usePretrained:
-            return api.load("word2vec-google-news-300")
+            # Gensim disabled to avoid dependency issues
+            print("Warning: Pretrained models disabled. Using random embeddings.")
+            return None
         return None
 
     def _buildEmbeddingMatrix(self):

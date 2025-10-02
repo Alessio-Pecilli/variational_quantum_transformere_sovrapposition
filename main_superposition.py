@@ -177,8 +177,22 @@ def train_on_hamiltonian_states(num_words, config, best_params=None):
     print("HAMILTONIAN-BASED TRAINING PHASE")
     print(f"{'='*60}")
     
+    # Display Hamiltonian input data
+    print(f"\n📊 INPUT DATA - HAMILTONIAN CONFIGURATION:")
+    print(f"Number of states to generate: {num_words}")
+    print(f"State dimension: {config['embedding_dim']}")
+    
     # Generate sequential states using Hamiltonian evolution
     states = generate_hamiltonian_states(num_words, config['embedding_dim'])
+    
+    # Display the Hamiltonian matrix and generated states
+    if hasattr(states, '__iter__') and len(states) > 0:
+        print(f"\n📊 GENERATED QUANTUM STATES:")
+        for i, state in enumerate(states):
+            print(f"State {i}: {state[:5]}{'...' if len(state) > 5 else ''}")  # Show first 5 elements
+            print(f"  → Norm: {np.linalg.norm(state):.6f}")
+            if len(state) > 0:
+                print(f"  → First element phase: {np.angle(state[0]):.4f} rad")
     
     print(f"\n{'='*60}")
     print(f"Processing {len(states)} Hamiltonian-generated states")
@@ -189,7 +203,13 @@ def train_on_hamiltonian_states(num_words, config, best_params=None):
     
     if len(states_calculated) > 0:
         print(f"Successfully processed {len(states_calculated)} state transitions")
-        best_params = optimize_parameters(
+        print(f"Calling optimization with:")
+        print(f"  - states_calculated: {len(states_calculated)} items")
+        print(f"  - U matrices: {len(U)} items")
+        print(f"  - Z matrices: {len(Z)} items")
+        print(f"  - initial best_params: {type(best_params)} {getattr(best_params, 'shape', 'no shape') if best_params is not None else 'None'}")
+        
+        result_params = optimize_parameters(
             config['max_hours'], 
             config['num_iterations'], 
             config['num_layers'], 
@@ -199,8 +219,12 @@ def train_on_hamiltonian_states(num_words, config, best_params=None):
             best_params, 
             dim=config['embedding_dim']
         )
+        
+        print(f"Optimization returned: {type(result_params)} {getattr(result_params, 'shape', 'no shape') if result_params is not None else 'None'}")
+        best_params = result_params
     else:
         print("No valid states calculated from Hamiltonian evolution, skipping optimization.")
+        best_params = None
     
     return best_params
     """
@@ -287,7 +311,21 @@ def train_on_sentences(sentences, config, best_params=None):
     print("TRAINING PHASE")
     print(f"{'='*60}")
     
+    # Display sentence input data
+    print(f"\n📊 INPUT DATA - SENTENCES:")
+    print(f"Number of sentences: {len(sentences)}")
+    print(f"Embedding dimension: {config['embedding_dim']}")
+    for i, sentence in enumerate(sentences):
+        print(f"Sentence {i+1}: '{sentence}'")
+        print(f"  → Length: {len(sentence.split())} words")
+    
     enc = Encoding(sentences, embeddingDim=config['embedding_dim'])
+    
+    # Display encoding information
+    print(f"\n📊 ENCODING RESULTS:")
+    print(f"Total state vectors generated: {len(enc.stateVectors)}")
+    for i, states in enumerate(enc.stateVectors):
+        print(f"Sentence {i+1} → {len(states)} state vectors (dim: {len(states[0]) if states else 0})")
     
     for sentence_idx, sentence in enumerate(sentences):
         print(f"\n{'='*60}")
@@ -370,23 +408,22 @@ def evaluate_on_hamiltonian_states(num_states, best_params, config):
     total_loss = 0.0
     valid_evaluations = 0
     
-    for i, (state_calc, U_val, Z_val) in enumerate(zip(states_calculated, U, Z)):
-        try:
-            circuit = circuit_func(config['num_layers'])
-            
-            # Calculate loss for this state transition
-            result = circuit(V, K, state_calc, U_val, Z_val)
-            if isinstance(result, (int, float, complex)):
-                loss_val = abs(result)**2
-            else:
-                loss_val = np.real(np.trace(result @ result.conj().T))
-            
-            total_loss += loss_val
-            valid_evaluations += 1
-            print(f"  State transition {i+1}: loss = {loss_val:.6f}")
-            
-        except Exception as e:
-            print(f"  State transition {i+1}: evaluation failed - {e}")
+    # Calculate loss using the same format as optimization - all states at once
+    try:
+        result = circuit_func(states_calculated, U, Z, V, K, config['num_layers'], config['embedding_dim'])
+        if isinstance(result, (int, float, complex)):
+            loss_val = abs(result)**2
+        else:
+            loss_val = np.real(np.trace(result @ result.conj().T))
+        
+        total_loss = loss_val
+        valid_evaluations = 1
+        print(f"  Total evaluation loss: {loss_val:.6f}")
+        
+    except Exception as e:
+        print(f"  Evaluation failed - {e}")
+        print(f"  Circuit function type: {type(circuit_func)}")
+        print(f"  Parameters: states_calc={len(states_calculated)}, U={len(U)}, Z={len(Z)}, V={V.shape}, K={K.shape}")
     
     if valid_evaluations > 0:
         avg_loss = total_loss / valid_evaluations
@@ -483,11 +520,43 @@ def main():
     print("1. Traditional sentence-based training")
     print("2. Hamiltonian-based sequential state training")
     
-    try:
+    """try:
         choice = input("Choose training mode (1 or 2, default=1): ").strip()
     except (EOFError, KeyboardInterrupt):
         print("\nNo input received, defaulting to mode 1 (traditional training).")
-        choice = "1"
+    """
+    choice = "1"
+    
+    # Choose optimization intensity
+    print("\nOptimization intensity:")
+    print("1. Instant   - Quick test (1 iteration, few evaluations)")
+    print("2. Fast      - Light training (5 iterations, moderate evaluations)")
+    print("3. Medium    - Balanced training (20 iterations, good convergence)")
+    print("4. Long      - Deep training (50+ iterations, full convergence)")
+    
+    """try:
+        opt_choice = input("Choose optimization intensity (1-4, default=2): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\nNo input received, defaulting to option 2 (Fast).")"""
+    opt_choice = "1"
+    
+    # Configure optimization parameters based on choice
+    if opt_choice == "1":
+        print("Using Instant optimization (quick test).")
+        config['num_iterations'] = 3  # Increased for better convergence with random params
+        config['max_hours'] = 15/3600  # 15 seconds
+    elif opt_choice == "3":
+        print("Using Medium optimization (balanced training).")
+        config['num_iterations'] = 20
+        config['max_hours'] = 30
+    elif opt_choice == "4":
+        print("Using Long optimization (deep training).")
+        config['num_iterations'] = 50
+        config['max_hours'] = 120
+    else:
+        print("Using Fast optimization (light training).")
+        config['num_iterations'] = 5
+        config['max_hours'] = 10
     
     if choice == "2":
         print("Using Hamiltonian-based training mode.")
@@ -512,12 +581,30 @@ def main():
         print("Using traditional sentence-based training mode.")
         use_hamiltonian = False
     
-    # Try to load existing parameters
-    best_params = load_parameters()
-    if best_params is not None:
-        print("Loaded parameters from file.")
+    # Check for existing parameters and ask user
+    existing_params = load_parameters()
+    if existing_params is not None:
+        print(f"Found existing parameters (shape: {len(existing_params)} values)")
+        print("\nParameter options:")
+        print("1. Use existing optimal parameters from file")
+        print("2. Start fresh with new random parameters")
+        """
+        try:
+            param_choice = input("Choose parameter initialization (1 or 2, default=1): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nNo input received, defaulting to option 1 (use existing).")
+            param_choice = "1"
+            """
+        param_choice = "2"
+        if param_choice == "2":
+            print("Starting with fresh random parameters.")
+            best_params = None
+        else:
+            print("Using existing optimal parameters from file.")
+            best_params = existing_params
     else:
-        print("No existing parameters found, starting from scratch.")
+        print("No existing parameters found, starting with fresh random parameters.")
+        best_params = None
     
     # Training phase
     if use_hamiltonian:
