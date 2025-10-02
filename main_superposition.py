@@ -217,7 +217,9 @@ def train_on_hamiltonian_states(num_words, config, best_params=None):
             U, 
             Z, 
             best_params, 
-            dim=config['embedding_dim']
+            dim=config['embedding_dim'],
+            opt_maxiter=config['opt_maxiter'],
+            opt_maxfev=config['opt_maxfev']
         )
         
         print(f"Optimization returned: {type(result_params)} {getattr(result_params, 'shape', 'no shape') if result_params is not None else 'None'}")
@@ -344,7 +346,9 @@ def train_on_sentences(sentences, config, best_params=None):
                 U, 
                 Z, 
                 best_params, 
-                dim=config['embedding_dim']
+                dim=config['embedding_dim'],
+                opt_maxiter=config['opt_maxiter'],
+                opt_maxfev=config['opt_maxfev']
             )
         else:
             print("No valid states calculated for this sentence, skipping optimization.")
@@ -503,116 +507,62 @@ def evaluate_on_sentences(sentences, best_params, config):
 
 def main():
     """
-    Main execution function.
+    Main execution function - NO INPUTS, VERAMENTE ISTANTANEO!
     """
-    # Load configuration
+    # Load configuration and make it REALLY fast
     config = OPTIMIZATION_CONFIG.copy()
     
-    print("Quantum Superposition Language Model")
-    print("=" * 60)
-    print(f"Configuration:")
-    for key, value in config.items():
-        print(f"  {key}: {value}")
-    print("=" * 60)
+    # CONFIGURAZIONE DINAMICA BASED ON MODE
+    mode = "instant"  # Cambia questo per testare: "instant", "fast", "medium", "long"
     
-    # Choose training mode
-    print("\nTraining options:")
-    print("1. Traditional sentence-based training")
-    print("2. Hamiltonian-based sequential state training")
-    
-    """try:
-        choice = input("Choose training mode (1 or 2, default=1): ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("\nNo input received, defaulting to mode 1 (traditional training).")
-    """
-    choice = "1"
-    
-    # Choose optimization intensity
-    print("\nOptimization intensity:")
-    print("1. Instant   - Quick test (1 iteration, few evaluations)")
-    print("2. Fast      - Light training (5 iterations, moderate evaluations)")
-    print("3. Medium    - Balanced training (20 iterations, good convergence)")
-    print("4. Long      - Deep training (50+ iterations, full convergence)")
-    
-    """try:
-        opt_choice = input("Choose optimization intensity (1-4, default=2): ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("\nNo input received, defaulting to option 2 (Fast).")"""
-    opt_choice = "1"
-    
-    # Configure optimization parameters based on choice
-    if opt_choice == "1":
-        print("Using Instant optimization (quick test).")
-        config['num_iterations'] = 3  # Increased for better convergence with random params
-        config['max_hours'] = 15/3600  # 15 seconds
-    elif opt_choice == "3":
-        print("Using Medium optimization (balanced training).")
-        config['num_iterations'] = 20
-        config['max_hours'] = 30
-    elif opt_choice == "4":
-        print("Using Long optimization (deep training).")
+    if mode == "instant":
+        config['num_iterations'] = 1
+        config['max_hours'] = 0.004  # 14 SECONDI MAX!!! 
+        config['num_layers'] = 1
+        config['opt_maxiter'] = 1  # UNA SOLA iterazione interna!
+        config['opt_maxfev'] = 2   # SOLO 2 valutazioni!
+        print("MODALITÀ INSTANT - VERAMENTE istantaneo (14 sec max)")
+    elif mode == "fast": 
+        config['num_iterations'] = 3
+        config['max_hours'] = 0.1  # 6 minuti
+        config['num_layers'] = 2
+        config['opt_maxiter'] = 10
+        config['opt_maxfev'] = 15
+        print("MODALITÀ FAST - Veloce")
+    elif mode == "medium":
+        config['num_iterations'] = 10
+        config['max_hours'] = 0.5  # 30 minuti
+        config['num_layers'] = 2
+        config['opt_maxiter'] = 40
+        config['opt_maxfev'] = 60
+        print("MODALITÀ MEDIUM - Bilanciata")
+    else:  # long
         config['num_iterations'] = 50
-        config['max_hours'] = 120
-    else:
-        print("Using Fast optimization (light training).")
-        config['num_iterations'] = 5
-        config['max_hours'] = 10
+        config['max_hours'] = 2.0  # 2 ore
+        config['num_layers'] = 3
+        config['opt_maxiter'] = 100
+        config['opt_maxfev'] = 150
+        print("MODALITÀ LONG - Approfondita")
     
-    if choice == "2":
-        print("Using Hamiltonian-based training mode.")
-        use_hamiltonian = True
-        try:
-            num_words_input = input("Number of sequential states to generate (5 for 4 transitions, 9 for 8 transitions, default=5): ").strip()
-            num_words = int(num_words_input) if num_words_input else 5
-        except (EOFError, KeyboardInterrupt, ValueError):
-            print("Invalid input, using default value of 5.")
-            num_words = 5
-        
-        # Validate that num_words will produce supported transitions
-        num_transitions = num_words - 1
-        supported_transitions = [2, 4, 8, 16]
-        if num_transitions not in supported_transitions:
-            print(f"Warning: {num_transitions} transitions not supported. Supported: {supported_transitions}")
-            # Find closest supported number
-            closest = min(supported_transitions, key=lambda x: abs(x - num_transitions))
-            num_words = closest + 1
-            print(f"Adjusted to {num_words} states ({closest} transitions)")
-    else:
-        print("Using traditional sentence-based training mode.")
-        use_hamiltonian = False
+    print("Quantum Superposition Language Model - MODALITÀ DINAMICA")
+    print("=" * 80)
+    print(f"CONFIGURAZIONE {mode.upper()}:")
+    print(f"  Iterazioni esterne: {config['num_iterations']}")
+    print(f"  Tempo MAX: {config['max_hours']*3600:.0f} SECONDI")
+    print(f"  Layers: {config['num_layers']}")
+    print(f"  Iterazioni interne ottimizzatore: {config['opt_maxiter']}")
+    print(f"  Valutazioni funzione: {config['opt_maxfev']}")
+    print(f"  Embedding dim: {config['embedding_dim']}")
+    print("=" * 80)
     
-    # Check for existing parameters and ask user
-    existing_params = load_parameters()
-    if existing_params is not None:
-        print(f"Found existing parameters (shape: {len(existing_params)} values)")
-        print("\nParameter options:")
-        print("1. Use existing optimal parameters from file")
-        print("2. Start fresh with new random parameters")
-        """
-        try:
-            param_choice = input("Choose parameter initialization (1 or 2, default=1): ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nNo input received, defaulting to option 1 (use existing).")
-            param_choice = "1"
-            """
-        param_choice = "2"
-        if param_choice == "2":
-            print("Starting with fresh random parameters.")
-            best_params = None
-        else:
-            print("Using existing optimal parameters from file.")
-            best_params = existing_params
-    else:
-        print("No existing parameters found, starting with fresh random parameters.")
-        best_params = None
+    # PARAMETRI SEMPRE FRESCHI - NESSUN INPUT RICHIESTO!
+    print("Avvio con parametri freschi (ignoro parametri esistenti per test veloce)")
+    best_params = None
     
-    # Training phase
-    if use_hamiltonian:
-        best_params = train_on_hamiltonian_states(num_words, config, best_params)
-    else:
-        best_params = train_on_sentences(TRAINING_SENTENCES, config, best_params)
+    # TRAINING FASE - CON PARAMETRI DINAMICI!
+    best_params = train_on_sentences(TRAINING_SENTENCES, config, best_params)
     
-    # Save the trained parameters
+    # Salvataggio parametri
     if best_params is not None:
         save_parameters(best_params)
         print("Training completed. Parameters saved.")
@@ -620,12 +570,8 @@ def main():
         print("Training failed to produce valid parameters.")
         return
     
-    # Evaluation phase
-    if use_hamiltonian:
-        print("Evaluation with Hamiltonian states...")
-        avg_loss = evaluate_on_hamiltonian_states(num_words, best_params, config)
-    else:
-        avg_loss = evaluate_on_sentences(DEFAULT_SENTENCES, best_params, config)
+    # Valutazione veloce
+    avg_loss = evaluate_on_sentences(DEFAULT_SENTENCES, best_params, config)
     
     if avg_loss is not None:
         print(f"\nFinal evaluation loss: {avg_loss:.6f}")

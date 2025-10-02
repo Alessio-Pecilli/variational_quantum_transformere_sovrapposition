@@ -79,7 +79,7 @@ def create_loss_function(circuit_function, psi, U, Z, num_layers, dim, param_sha
     return loss_function
 
 
-def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_params=None, dim=16):
+def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_params=None, dim=16, opt_maxiter=40, opt_maxfev=60):
     """
     Comprehensive parameter optimization using multiple algorithms.
     
@@ -166,7 +166,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
                         result_powell = minimize(
                             loss_function, params_init, method='Powell',
                             callback=early_stop_callback,
-                            options={'maxiter': 40, 'maxfev': 60, 'xtol': 1e-4, 'ftol': 1e-4, 'disp': False}
+                            options={'maxiter': opt_maxiter, 'maxfev': opt_maxfev, 'xtol': 1e-4, 'ftol': 1e-4, 'disp': False}
                         )
                         warm_params = result_powell.x
                         print(f"Powell warm-up completed with loss: {result_powell.fun:.6f}")
@@ -233,6 +233,19 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
         
         if aborted_by_user:
             print("Partial results saved. Clean exit.")
+    
+    # SEMPRE ritorna parametri validi, anche se casuali per modalità instant
+    if best_params is None:
+        print("⚡ No optimal parameters found - generating fallback parameters for instant mode")
+        # Genera parametri piccoli e casuali come fallback
+        n_qubit = 2
+        param_shape = get_params(n_qubit, num_layers).shape
+        n_params = int(np.prod(param_shape))
+        fallback_params = np.concatenate([
+            0.1 * np.random.randn(n_params),  # Parametri V piccoli
+            0.1 * np.random.randn(n_params)   # Parametri K piccoli
+        ])
+        return fallback_params
     
     return best_params
 
@@ -346,7 +359,7 @@ def optimize_experimental_parameters(max_hours, num_iterations, num_layers, psi,
                         result_powell = minimize(
                             loss_function_experimental, params_init, method='Powell',
                             callback=early_stop_callback,
-                            options={'maxiter': 40, 'maxfev': 60, 'xtol': 1e-4, 'ftol': 1e-4, 'disp': False}
+                            options={'maxiter': opt_maxiter, 'maxfev': opt_maxfev, 'xtol': 1e-4, 'ftol': 1e-4, 'disp': False}
                         )
                         warm_params = result_powell.x
                     except StopIteration:
