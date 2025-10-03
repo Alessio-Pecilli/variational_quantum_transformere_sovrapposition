@@ -79,7 +79,8 @@ DEFAULT_SENTENCES = [
 
 # Training sentences
 TRAINING_SENTENCES = [
-    "The quick brown fox jumps",
+    "The cat flies",  # SOLO 2 PAROLE per instant mode! (1 transizione = super veloce)
+    #"The quick brown fox jumps",
     #"Every morning birds sing songs",
     #"Children happily play in parks",
     #"Beautiful flowers bloom in spring",

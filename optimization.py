@@ -79,7 +79,7 @@ def create_loss_function(circuit_function, psi, U, Z, num_layers, dim, param_sha
     return loss_function
 
 
-def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_params=None, dim=16):
+def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_params=None, dim=16, opt_maxiter=40, opt_maxfev=60):
     """
     Comprehensive parameter optimization using multiple algorithms.
     
@@ -92,6 +92,8 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
         Z (list): Current word unitaries
         best_params (array): Initial parameters (optional)
         dim (int): Dimension parameter
+        opt_maxiter (int): Maximum iterations for internal optimizer
+        opt_maxfev (int): Maximum function evaluations for internal optimizer
         
     Returns:
         array: Optimized parameters
@@ -137,7 +139,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
             print(f"\n=== Experiment {experiment + 1}/{num_experiments} ===")
             losses_temp = []
             
-            for iteration in range(1, num_iterations):
+            for iteration in range(num_iterations):
                 print(f"\n-- External iteration {iteration + 1}/{num_iterations} --")
                 
                 # Initialize parameters
@@ -166,7 +168,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
                         result_powell = minimize(
                             loss_function, params_init, method='Powell',
                             callback=early_stop_callback,
-                            options={'maxiter': 40, 'maxfev': 60, 'xtol': 1e-4, 'ftol': 1e-4, 'disp': False}
+                            options={'maxiter': opt_maxiter, 'maxfev': opt_maxfev, 'xtol': 1e-4, 'ftol': 1e-4, 'disp': False}
                         )
                         warm_params = result_powell.x
                         print(f"Powell warm-up completed with loss: {result_powell.fun:.6f}")
@@ -179,7 +181,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
                             loss_function, warm_params, method='L-BFGS-B', jac=None,
                             bounds=[(-np.pi, np.pi)] * len(warm_params),
                             callback=early_stop_callback,
-                            options={'maxiter': 100, 'maxfun': 100, 'ftol': 1e-10, 'maxcor': 20, 'disp': False}
+                            options={'maxiter': opt_maxiter, 'maxfun': opt_maxfev, 'ftol': 1e-10, 'maxcor': 20, 'disp': False}
                         )
                         best_params = result_lbfgs.x
                         print(f"L-BFGS-B refinement completed with loss: {result_lbfgs.fun:.6f}")

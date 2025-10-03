@@ -1,0 +1,3 @@
+Iteration	Average_Loss	Best_Loss	Worst_Loss
+0	1.775897	1.370636	2.513017
+1	0.966428	0.535338	1.786166
