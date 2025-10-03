@@ -4,8 +4,8 @@ Configuration settings for quantum optimization experiments.
 
 # Optimization settings
 OPTIMIZATION_CONFIG = {
-    'num_iterations': 2,
-    'num_layers': 2,
+    'num_iterations': 5,
+    'num_layers': 4,
     'max_hours': 100,
     'embedding_dim': 4,
     'n_qubits': 2,
@@ -18,13 +18,13 @@ OPTIMIZATION_CONFIG = {
 # Optimization algorithm settings
 OPTIMIZER_CONFIG = {
     'powell': {
-        'maxiter': 40,
+        'maxiter': 400,
         'maxfev': 60,
         'xtol': 1e-4,
         'ftol': 1e-4
     },
     'lbfgs': {
-        'maxiter': 100,
+        'maxiter': 1000,
         'maxfun': 100,
         'ftol': 1e-10,
         'maxcor': 20
@@ -79,7 +79,7 @@ DEFAULT_SENTENCES = [
 
 # Training sentences
 TRAINING_SENTENCES = [
-    "The cat flies",  # SOLO 2 PAROLE per instant mode! (1 transizione = super veloce)
+    "The cat flies",  
     "The quick brown fox jumps",
     "Every morning birds sing songs",
     "Children happily play in parks",
