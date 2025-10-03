@@ -217,7 +217,9 @@ def train_on_hamiltonian_states(num_words, config, best_params=None):
             U, 
             Z, 
             best_params, 
-            dim=config['embedding_dim']
+            dim=config['embedding_dim'],
+            opt_maxiter=config['opt_maxiter'],
+            opt_maxfev=config['opt_maxfev']
         )
         
         print(f"Optimization returned: {type(result_params)} {getattr(result_params, 'shape', 'no shape') if result_params is not None else 'None'}")
@@ -344,7 +346,9 @@ def train_on_sentences(sentences, config, best_params=None):
                 U, 
                 Z, 
                 best_params, 
-                dim=config['embedding_dim']
+                dim=config['embedding_dim'],
+                opt_maxiter=config['opt_maxiter'],
+                opt_maxfev=config['opt_maxfev']
             )
         else:
             print("No valid states calculated for this sentence, skipping optimization.")
@@ -503,7 +507,7 @@ def evaluate_on_sentences(sentences, best_params, config):
 
 def main():
     """
-    Main execution function - VERAMENTE ISTANTANEO!
+    Main execution function - NO INPUTS, VERAMENTE ISTANTANEO!
     """
     # Load configuration and make it REALLY fast
     config = OPTIMIZATION_CONFIG.copy()
@@ -550,9 +554,6 @@ def main():
     print(f"  Valutazioni funzione: {config['opt_maxfev']}")
     print(f"  Embedding dim: {config['embedding_dim']}")
     print("=" * 80)
-    
-    # NO INPUT - always use sentence mode
-    use_hamiltonian = False
     
     # PARAMETRI SEMPRE FRESCHI - NESSUN INPUT RICHIESTO!
     print("Avvio con parametri freschi (ignoro parametri esistenti per test veloce)")
