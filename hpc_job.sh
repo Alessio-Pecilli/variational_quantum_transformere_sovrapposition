@@ -13,10 +13,10 @@
 
 echo "=== QUANTUM HPC JOB (NO MPI) $SLURM_JOB_ID STARTED at $(date) ==="
 
-# Setup moduli (NO MPI)
+# Setup moduli 
 module purge
 module load python/3.11.7
-module load openmpi/4.1.5
+module load openmpi/4.1.6--gcc--12.2.0
 
 # Attiva ambiente virtuale
 source $WORK/venv_py311/bin/activate
@@ -34,7 +34,7 @@ echo "  - OMP_NUM_THREADS: $OMP_NUM_THREADS"
 echo "  - Multiprocessing workers: $SLURM_CPUS_PER_TASK"
 
 # Vai nella directory progetto
-cd $WORK/try25_rosati/variational_quantum_transformere_sovrapposition || {
+cd $WORK/variational_quantum_transformere_sovrapposition || {
     echo "❌ ERRORE: Directory progetto non trovata!"
     exit 1
 }
