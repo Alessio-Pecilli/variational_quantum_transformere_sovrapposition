@@ -9,6 +9,9 @@ OPTIMIZATION_CONFIG = {
     'max_hours': 100,
     'embedding_dim': 4,
     'n_qubits': 2,
+    'num_qubits': 2,  # Alias for consistency
+    'epochs': 10,
+    'learning_rate': 0.01,
     'save_frequency': 50,  # Save parameters every N evaluations
     'log_frequency': 60,   # Log progress every N seconds
     'early_stop_threshold': 0.1,
