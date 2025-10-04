@@ -79,14 +79,18 @@ def main():
     # Encoding
     enc = Encoding(sentences, embeddingDim=config['embedding_dim'])
     
-    # Parametri iniziali  
-    params = get_params(
-        num_layers=config['num_layers'],
-        num_qubits=config['num_qubits']
-    )
+    # Parametri iniziali (come nel codice esistente)
+    param_shape = get_params(config['num_qubits'], config['num_layers']).shape
+    n_params = int(np.prod(param_shape))
+    num_params = 2 * n_params  # V and K parameters
     
-    print(f"  Parametri: V={len(params['V'])}, K={len(params['K'])}")
-    print(f"  Total params: {len(params['V']) + len(params['K'])}")
+    # Inizializzazione parametri (STESSO MODO del main_superposition_mpi.py)
+    params = np.random.randn(num_params) * 0.1
+    
+    print(f"  Total parametri: {num_params}")
+    print(f"  Parametri V: {n_params}")
+    print(f"  Parametri K: {n_params}")
+    print(f"  Param shape: {param_shape}")
     
     print(f"\n📝 FRASI DI TRAINING:")
     for i, sentence in enumerate(sentences):
@@ -128,16 +132,17 @@ def main():
                 parallel=True  # SEMPRE PARALLELO
             )
             
-            # Update parametri
-            params['V'] = params['V'] - config['learning_rate'] * grad['V']
-            params['K'] = params['K'] - config['learning_rate'] * grad['K']
+            # Update parametri (gradient descent step come nel MPI code)
+            params = params - config['learning_rate'] * grad
             
             epoch_loss += loss
             sentence_time = time.time() - sentence_start
             
+            # Calcolo gradient norm
+            grad_norm = np.linalg.norm(grad)
+            
             print(f"  Loss: {loss:.6f}")
-            print(f"  Grad norm V: {np.linalg.norm(grad['V']):.6f}")
-            print(f"  Grad norm K: {np.linalg.norm(grad['K']):.6f}")
+            print(f"  Grad norm: {grad_norm:.6f}")
             print(f"  Time: {sentence_time:.2f}s")
         
         # Statistiche epoch
