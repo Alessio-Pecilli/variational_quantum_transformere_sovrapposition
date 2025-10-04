@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-HPC QUANTUM TRAINING - FILE UNICO PER ESECUZIONE
+HPC QUANTUM TRAINING - NO MPI, SOLO MULTIPROCESSING
 
 COMANDO PER HPC:
     python hpc_quantum_training.py
 
 FEATURES:
-- Auto-detect risorse HPC (SLURM/PBS/OMP)
-- 100% parallelo sempre  
+- NO MPI (evita problemi librerie HPC)
+- Auto-detect risorse HPC (SLURM/PBS/OMP) 
+- Parallelizzazione multiprocessing pura
 - Usa tutte le tue configurazioni
 """
 
@@ -33,50 +34,90 @@ def get_hpc_workers():
     slurm = os.environ.get('SLURM_CPUS_PER_TASK')
     pbs = os.environ.get('PBS_NP')
     
-    if omp: return int(omp)
-    if slurm: return int(slurm) 
-    if pbs: return int(pbs)
-    return cpu_count()
+    print(f"🔍 RILEVAMENTO RISORSE HPC:")
+    print(f"  OMP_NUM_THREADS: {omp}")
+    print(f"  SLURM_CPUS_PER_TASK: {slurm}")
+    print(f"  PBS_NP: {pbs}")
+    print(f"  CPU_COUNT: {cpu_count()}")
+    
+    if omp and int(omp) > 1: 
+        workers = int(omp)
+        source = "OMP_NUM_THREADS"
+    elif slurm and int(slurm) > 1: 
+        workers = int(slurm)
+        source = "SLURM_CPUS_PER_TASK"
+    elif pbs and int(pbs) > 1: 
+        workers = int(pbs)
+        source = "PBS_NP"
+    else: 
+        workers = cpu_count()
+        source = "CPU_COUNT"
+    
+    print(f"  ✅ WORKERS SCELTI: {workers} (da {source})")
+    return workers
 
 
 def main():
-    """Training principale HPC"""
+    """Training principale HPC senza MPI"""
     
-    print("🚀 HPC QUANTUM TRAINING")
-    print("=" * 40)
+    print("🚀 HPC QUANTUM TRAINING - MULTIPROCESSING ONLY")
+    print("=" * 60)
     
     # Config
     config = OPTIMIZATION_CONFIG.copy()
     workers = get_hpc_workers()
-    print(f"Workers: {workers}")
     
-    # Dati
+    # Dati di training
     sentences = TRAINING_SENTENCES.copy()
-    enc = Encoding(sentences, embeddingDim=config['embedding_dim'])
-    circuit_func = get_circuit_function()
+    print(f"\n📊 CONFIGURAZIONE:")
+    print(f"  Sentences: {len(sentences)}")
+    print(f"  Workers: {workers}")
+    print(f"  Epochs: {config['epochs']}")
+    print(f"  Learning rate: {config['learning_rate']}")
+    print(f"  Embedding dim: {config['embedding_dim']}")
     
-    # Parametri iniziali
+    # Encoding
+    enc = Encoding(sentences, embeddingDim=config['embedding_dim'])
+    
+    # Parametri iniziali  
     params = get_params(
         num_layers=config['num_layers'],
         num_qubits=config['num_qubits']
     )
     
-    print(f"Sentences: {len(sentences)}")
-    print(f"Parametri: V={len(params['V'])}, K={len(params['K'])}")
+    print(f"  Parametri: V={len(params['V'])}, K={len(params['K'])}")
+    print(f"  Total params: {len(params['V']) + len(params['K'])}")
+    
+    print(f"\n📝 FRASI DI TRAINING:")
+    for i, sentence in enumerate(sentences):
+        words = sentence.split()
+        print(f"  {i+1:2d}. '{sentence}' ({len(words)} parole)")
     
     # Training loop
+    print(f"\n🎯 INIZIO TRAINING")
+    print("=" * 60)
+    
     for epoch in range(config['epochs']):
+        epoch_start = time.time()
         epoch_loss = 0.0
         
         print(f"\n--- EPOCH {epoch+1}/{config['epochs']} ---")
         
         for i, sentence in enumerate(sentences):
-            print(f"Sentence {i+1}/{len(sentences)}: '{sentence}'")
+            sentence_start = time.time()
+            print(f"\nSentence {i+1}/{len(sentences)}: '{sentence}'")
+            
+            # Calcola num_words per get_circuit_function
+            words = sentence.split()
+            num_words = len(words)
+            
+            # Circuit function con num_words corretto
+            circuit_func = get_circuit_function(num_words)
             
             # States dalla tua funzione
             states = process_sentence_states(sentence, enc, circuit_func, params, config)
             
-            # Loss e gradiente PARALLELI
+            # Loss e gradiente PARALLELI (sempre parallel=True)
             loss, grad = loss_and_grad_for_sentence(
                 params=params,
                 states=states,
@@ -92,15 +133,37 @@ def main():
             params['K'] = params['K'] - config['learning_rate'] * grad['K']
             
             epoch_loss += loss
-            print(f"Loss: {loss:.4f}")
+            sentence_time = time.time() - sentence_start
+            
+            print(f"  Loss: {loss:.6f}")
+            print(f"  Grad norm V: {np.linalg.norm(grad['V']):.6f}")
+            print(f"  Grad norm K: {np.linalg.norm(grad['K']):.6f}")
+            print(f"  Time: {sentence_time:.2f}s")
         
+        # Statistiche epoch
         avg_loss = epoch_loss / len(sentences)
-        print(f"EPOCH {epoch+1} LOSS MEDIA: {avg_loss:.4f}")
+        epoch_time = time.time() - epoch_start
+        
+        print(f"\n🎯 EPOCH {epoch+1} COMPLETATA:")
+        print(f"  Loss media: {avg_loss:.6f}")
+        print(f"  Tempo epoch: {epoch_time:.2f}s")
+        print(f"  Tempo per sentence: {epoch_time/len(sentences):.2f}s")
+        
+        # Salva parametri ogni epoch
+        save_parameters(params, f"hpc_params_epoch_{epoch+1}")
     
     # Salva risultati finali
-    save_parameters(params, f"final_hpc_params_epoch_{config['epochs']}")
-    print("\n✅ TRAINING COMPLETATO!")
-    print(f"Parametri salvati in: final_hpc_params_epoch_{config['epochs']}")
+    final_file = f"final_hpc_params_epoch_{config['epochs']}"
+    save_parameters(params, final_file)
+    
+    print(f"\n✅ TRAINING COMPLETATO!")
+    print("=" * 60)
+    print(f"🎯 RISULTATI FINALI:")
+    print(f"  Epochs completate: {config['epochs']}")
+    print(f"  Loss finale: {avg_loss:.6f}")
+    print(f"  Workers utilizzati: {workers}")
+    print(f"  Parametri salvati: {final_file}.json")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

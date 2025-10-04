@@ -3,34 +3,34 @@
 #SBATCH --output=quantum_training_%j.log
 #SBATCH --error=quantum_training_%j.log
 #SBATCH --nodes=1
-#SBATCH --ntasks=4
-#SBATCH --cpus-per-task=2
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
 #SBATCH --time=02:00:00
 #SBATCH --partition=boost_usr_prod
 #SBATCH --account=try25_rosati
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=ale.pecilli@stud.uniroma3.it
 
-echo "=== QUANTUM HPC JOB $SLURM_JOB_ID STARTED at $(date) ==="
+echo "=== QUANTUM HPC JOB (NO MPI) $SLURM_JOB_ID STARTED at $(date) ==="
 
-# Setup moduli
+# Setup moduli (NO MPI)
 module purge
 module load python/3.11.7
 
 # Attiva ambiente virtuale
 source $WORK/venv_py311/bin/activate
 
-# Setup variabili HPC
+# Setup variabili HPC per multiprocessing
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export SLURM_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
-echo "🖥️ CONFIGURAZIONE HPC:"
+echo "🖥️ CONFIGURAZIONE HPC (MULTIPROCESSING):"
 echo "  - Job ID: $SLURM_JOB_ID"
 echo "  - Nodes: $SLURM_NNODES"
-echo "  - Tasks: $SLURM_NTASKS"  
+echo "  - Tasks: $SLURM_NTASKS (single process)"
 echo "  - CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "  - OMP_NUM_THREADS: $OMP_NUM_THREADS"
-echo "  - Total CPUs: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK))"
+echo "  - Multiprocessing workers: $SLURM_CPUS_PER_TASK"
 
 # Vai nella directory progetto
 cd $WORK/try25_rosati/variational_quantum_transformere_sovrapposition || {
@@ -43,8 +43,8 @@ echo "📁 Working directory: $(pwd)"
 # Crea directory per risultati
 mkdir -p logs checkpoints results
 
-# ESEGUI IL TUO FILE HPC
-echo "🚀 AVVIO TRAINING QUANTISTICO..."
+# ESEGUI IL TUO FILE HPC (NO MPI, NO SRUN)
+echo "🚀 AVVIO TRAINING QUANTISTICO (MULTIPROCESSING)..."
 python hpc_quantum_training.py
 
 EXIT_CODE=$?
