@@ -16,6 +16,7 @@ echo "=== QUANTUM HPC JOB (NO MPI) $SLURM_JOB_ID STARTED at $(date) ==="
 # Setup moduli (NO MPI)
 module purge
 module load python/3.11.7
+module load openmpi/4.1.5
 
 # Attiva ambiente virtuale
 source $WORK/venv_py311/bin/activate
