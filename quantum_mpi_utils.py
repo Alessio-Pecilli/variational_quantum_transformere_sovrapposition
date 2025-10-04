@@ -4,6 +4,9 @@ Implements data-parallel synchronous training following DDP pattern.
 """
 
 import numpy as np
+import os
+from multiprocessing import Pool, cpu_count
+from functools import partial
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector
 from qiskit.circuit.library import UnitaryGate
@@ -58,26 +61,100 @@ def build_variational_ansatz(n_qubits, num_layers):
 
 def build_input_unitary(psi, U, Z):
     """
-    Build the input encoding as a UnitaryGate.
-    This encoding is sentence-dependent and needs to be reconstructed for each sentence.
+    Build the input encoding as a UnitaryGate from sentence states.
+    This encoding is sentence-dependent and represents the quantum state of the input sentence.
+    
+    The encoding follows the structure used in quantum_circuits.py:
+    - psi: initial state unitaries (Ψ vectors representing word combinations)
+    - U: next word prediction unitaries (U† matrices)
+    - Z: current word unitaries (Z† matrices)
+    
+    For compatibility with Qiskit's UnitaryGate, the matrix must be 2^n × 2^n dimensional.
+    We use the FIRST psi matrix as the primary encoding, which represents the combined
+    state of all words in the sentence (created by kronecker products in process_sentence_states).
     
     Args:
-        psi (list): Initial state unitaries
-        U (list): Next word unitaries
-        Z (list): Current word unitaries
+        psi (list): List of unitary matrices for initial states (from process_sentence_states)
+        U (list): List of unitary matrices for next word prediction (U_dagger)
+        Z (list): List of unitary matrices for current word (Z_dagger)
         
     Returns:
-        UnitaryGate: Unitary encoding of the input
+        UnitaryGate: Unitary encoding of the input sentence states
     """
-    # This is a placeholder - actual implementation depends on how you encode inputs
-    # Typically this would be based on the state preparation from your data
+    # Determine dimensions from input
+    if not psi or len(psi) == 0:
+        # Fallback to identity for empty input
+        n_qubits = 4
+        unitary_matrix = np.eye(2**n_qubits, dtype=complex)
+        return UnitaryGate(unitary_matrix, label="InputEncoding")
     
-    # For now, return identity as placeholder
-    # You need to implement the actual encoding based on psi, U, Z
-    n_qubits = 4  # Adjust based on your system
-    unitary_matrix = np.eye(2**n_qubits, dtype=complex)
+    # Use the first psi matrix as the primary encoding
+    # In quantum_circuits.py, each psi represents a superposition of word states
+    # The first one encodes the most important transition
+    unitary_matrix = psi[0].copy()
     
-    return UnitaryGate(unitary_matrix)
+    # Verify dimension is a power of 2 (required for UnitaryGate)
+    dim = unitary_matrix.shape[0]
+    n_qubits = int(np.log2(dim))
+    
+    if 2**n_qubits != dim:
+        raise ValueError(f"Matrix dimension {dim} is not a power of 2! Cannot create UnitaryGate.")
+    
+    # Optional: Add information from U and Z through phase modulation
+    # This enriches the encoding without changing dimensionality
+    if len(U) > 0 and len(Z) > 0:
+        # Extract phase information from U[0] and Z[0]
+        # Note: U and Z might have different dimensions than psi (e.g., 4x4 vs 16x16)
+        # We only use the phase information that fits
+        U_dim = min(U[0].shape[0], dim)
+        Z_dim = min(Z[0].shape[0], dim)
+        min_dim = min(U_dim, Z_dim)
+        
+        # Extract phase information from U[0] and Z[0]
+        U_phases = np.angle(np.diag(U[0][:min_dim, :min_dim]))
+        Z_phases = np.angle(np.diag(Z[0][:min_dim, :min_dim]))
+        
+        # Create phase modulation matrix (extend to full dimension)
+        combined_phases = np.zeros(dim)
+        combined_phases[:min_dim] = 0.5 * (U_phases + Z_phases)
+        phase_matrix = np.diag(np.exp(1j * combined_phases))
+        
+        # Apply phase modulation: Ψ' = Ψ * Phase
+        unitary_matrix = unitary_matrix @ phase_matrix
+    
+    # Ensure the matrix is unitary (should already be, but verify)
+    # Check unitarity: U†U should be close to identity
+    unitary_check = unitary_matrix.conj().T @ unitary_matrix
+    identity = np.eye(dim)
+    unitarity_error = np.linalg.norm(unitary_check - identity, 'fro')
+    
+    if unitarity_error > 1e-6:
+        print(f"⚠️  Warning: Input encoding unitarity error: {unitarity_error:.2e}")
+        print(f"   Applying QR correction...")
+        
+        # Apply Gram-Schmidt to enforce unitarity
+        # Use QR decomposition which produces an orthonormal basis
+        Q, R = np.linalg.qr(unitary_matrix)
+        
+        # Adjust phases to match original as closely as possible
+        # Extract diagonal phases from R
+        phases = np.angle(np.diag(R))
+        phase_matrix = np.diag(np.exp(1j * phases))
+        
+        unitary_matrix = Q @ phase_matrix
+        
+        # Verify unitarity after correction
+        unitary_check_corrected = unitary_matrix.conj().T @ unitary_matrix
+        unitarity_error_corrected = np.linalg.norm(unitary_check_corrected - identity, 'fro')
+        
+        if unitarity_error_corrected > 1e-10:
+            print(f"   ❌ Unitarity error after QR correction: {unitarity_error_corrected:.2e}")
+        else:
+            print(f"   ✅ Unitarity restored (error: {unitarity_error_corrected:.2e})")
+    
+    return UnitaryGate(unitary_matrix, label="InputEncoding")
+
+
 
 
 def compose_full_circuit(qc_input, qc_template):
@@ -111,18 +188,77 @@ def simulate_probabilities(qc_bound):
     return sv.probabilities()
 
 
-def loss_and_grad_for_sentence(sentence_data, params, qc_template, theta_vec, circuit_function, num_layers, dim):
+def _compute_single_gradient_component(param_index, params, shift, psi, U, Z, num_layers, dim, circuit_function):
+    """
+    Helper function to compute a single gradient component using parameter-shift rule.
+    This function is designed to be called in parallel via multiprocessing.
+    
+    Args:
+        param_index (int): Index of parameter to compute gradient for
+        params (np.ndarray): Current parameter values
+        shift (float): Parameter shift amount (π/2)
+        psi (list): Initial state unitaries
+        U (list): Next word unitaries
+        Z (list): Current word unitaries
+        num_layers (int): Number of layers
+        dim (int): Dimension parameter
+        circuit_function (callable): Circuit function for loss calculation
+        
+    Returns:
+        float: Gradient component for this parameter
+    """
+    import os
+    import time
+    worker_pid = os.getpid()
+    start_time = time.time()
+    
+    # Shift parameter up
+    params_plus = params.copy()
+    params_plus[param_index] += shift
+    
+    loss_plus = circuit_function(psi, U, Z,
+                                 params_plus[:len(params)//2].reshape(get_params(2, num_layers).shape),
+                                 params_plus[len(params)//2:].reshape(get_params(2, num_layers).shape),
+                                 num_layers, dim)
+    
+    # Shift parameter down
+    params_minus = params.copy()
+    params_minus[param_index] -= shift
+    
+    loss_minus = circuit_function(psi, U, Z,
+                                  params_minus[:len(params)//2].reshape(get_params(2, num_layers).shape),
+                                  params_minus[len(params)//2:].reshape(get_params(2, num_layers).shape),
+                                  num_layers, dim)
+    
+    # Parameter-shift formula: ∂L/∂θᵢ = 0.5 * (L(θ+π/2) - L(θ-π/2))
+    gradient_component = 0.5 * (loss_plus - loss_minus)
+    
+    elapsed = time.time() - start_time
+    print(f"    Worker PID:{worker_pid} param[{param_index}] = {gradient_component:.6f} ({elapsed:.3f}s)")
+    
+    return gradient_component
+
+
+def loss_and_grad_for_sentence(sentence_data, params, qc_template, theta_vec, circuit_function, num_layers, dim, 
+                                parallel=True, n_workers=None):
     """
     Calculate loss and gradient for a single sentence using parameter-shift rule.
+    
+    Supports parallel gradient computation using multiprocessing for intra-rank speedup.
+    This provides a 2-level parallelization:
+    - Inter-rank: MPI distributes sentences across ranks
+    - Intra-rank: multiprocessing parallelizes gradient components within each rank
     
     Args:
         sentence_data (tuple): (psi, U, Z) for the sentence
         params (np.ndarray): Current parameter values
-        qc_template (QuantumCircuit): Variational ansatz template
-        theta_vec (ParameterVector): Parameter vector
+        qc_template (QuantumCircuit): Variational ansatz template (not used currently)
+        theta_vec (ParameterVector): Parameter vector (not used currently)
         circuit_function (callable): Circuit function for loss calculation
         num_layers (int): Number of layers
         dim (int): Dimension parameter
+        parallel (bool): Whether to use parallel gradient computation (default: True)
+        n_workers (int): Number of worker processes (default: None = auto-detect)
         
     Returns:
         tuple: (loss, gradient)
@@ -141,27 +277,75 @@ def loss_and_grad_for_sentence(sentence_data, params, qc_template, theta_vec, ci
     gradient = np.zeros_like(params)
     shift = np.pi / 2
     
-    for i in range(len(params)):
-        # Shift parameter up
-        params_plus = params.copy()
-        params_plus[i] += shift
+    if parallel and len(params) > 1:  # Parallelizza sempre (anche per pochi parametri)
+        # Use parallel computation for gradient - ALWAYS when parallel=True
+        # Determine number of workers DINAMICAMENTE (HPC-ready)
+        if n_workers is None:
+            # Priority order for HPC environments:
+            # 1. OMP_NUM_THREADS (OpenMP standard)
+            # 2. SLURM_CPUS_PER_TASK (SLURM workload manager)  
+            # 3. PBS_NP (PBS/Torque)
+            # 4. cpu_count() (fallback auto-detection)
+            omp_threads = os.environ.get('OMP_NUM_THREADS')
+            slurm_cpus = os.environ.get('SLURM_CPUS_PER_TASK')
+            pbs_cpus = os.environ.get('PBS_NP')
+            
+            if omp_threads:
+                n_workers = int(omp_threads)
+            elif slurm_cpus:
+                n_workers = int(slurm_cpus)
+            elif pbs_cpus:
+                n_workers = int(pbs_cpus)
+            else:
+                n_workers = min(cpu_count(), len(params))  # Don't spawn more workers than params
         
-        loss_plus = circuit_function(psi, U, Z,
-                                     params_plus[:len(params)//2].reshape(get_params(2, num_layers).shape),
-                                     params_plus[len(params)//2:].reshape(get_params(2, num_layers).shape),
-                                     num_layers, dim)
+        print(f"🔧 PARALLEL GRADIENT: {len(params)} parameters, {n_workers} workers")
+        print(f"   CPU count: {cpu_count()}")
+        print(f"   OMP_NUM_THREADS: {os.environ.get('OMP_NUM_THREADS', 'not set')}")
+        print(f"   SLURM_CPUS_PER_TASK: {os.environ.get('SLURM_CPUS_PER_TASK', 'not set')}")
+        print(f"   PBS_NP: {os.environ.get('PBS_NP', 'not set')}")
         
-        # Shift parameter down
-        params_minus = params.copy()
-        params_minus[i] -= shift
+        # Determine source of worker count for transparency
+        if os.environ.get('OMP_NUM_THREADS'):
+            worker_source = "OMP_NUM_THREADS"
+        elif os.environ.get('SLURM_CPUS_PER_TASK'):
+            worker_source = "SLURM_CPUS_PER_TASK"
+        elif os.environ.get('PBS_NP'):
+            worker_source = "PBS_NP"
+        else:
+            worker_source = "cpu_count() auto-detect"
+        print(f"   Workers source: {worker_source}")
         
-        loss_minus = circuit_function(psi, U, Z,
-                                      params_minus[:len(params)//2].reshape(get_params(2, num_layers).shape),
-                                      params_minus[len(params)//2:].reshape(get_params(2, num_layers).shape),
-                                      num_layers, dim)
+        # Create partial function with fixed arguments
+        compute_grad = partial(_compute_single_gradient_component,
+                              params=params,
+                              shift=shift,
+                              psi=psi,
+                              U=U,
+                              Z=Z,
+                              num_layers=num_layers,
+                              dim=dim,
+                              circuit_function=circuit_function)
         
-        # Parameter-shift formula
-        gradient[i] = 0.5 * (loss_plus - loss_minus)
+        # Parallel computation of all gradient components
+        import time
+        start_time = time.time()
+        with Pool(processes=n_workers) as pool:
+            gradient = np.array(pool.map(compute_grad, range(len(params))))
+        parallel_time = time.time() - start_time
+        print(f"   ⚡ Parallel gradient computed in {parallel_time:.3f}s with {n_workers} workers")
+    
+    else:
+        # Sequential computation (for small parameter counts or when parallel=False)
+        print(f"🔧 SEQUENTIAL GRADIENT: {len(params)} parameters (parallel={parallel})")
+        import time
+        start_time = time.time()
+        for i in range(len(params)):
+            gradient[i] = _compute_single_gradient_component(
+                i, params, shift, psi, U, Z, num_layers, dim, circuit_function
+            )
+        sequential_time = time.time() - start_time
+        print(f"   🐌 Sequential gradient computed in {sequential_time:.3f}s")
     
     return loss_current, gradient
 

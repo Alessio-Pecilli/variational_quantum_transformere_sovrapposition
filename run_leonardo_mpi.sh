@@ -3,7 +3,7 @@
 #SBATCH --output=logs/qtransformer_%j.out
 #SBATCH --error=logs/qtransformer_%j.err
 #SBATCH --nodes=1
-#SBATCH --ntasks=8
+#SBATCH --ntasks-per-node=16
 #SBATCH --cpus-per-task=4
 #SBATCH --time=02:00:00
 #SBATCH --partition=boost_usr_prod
@@ -14,7 +14,8 @@
 # ============================================================================
 # 
 # This script runs MPI-based data-parallel training with:
-#   - 1 node, 8 MPI ranks, 4 CPUs per rank (32 cores total)
+#   - 1 node, 16 MPI ranks, 4 CPUs per rank (64 cores total - FULL NODE)
+#   - Dynamically adapts to SLURM allocation
 #   - Python 3.11.7 virtual environment
 #   - Checkpoint/resume support
 #   - Automatic logs directory creation
@@ -59,8 +60,10 @@ python -c "from mpi4py import MPI; print(f'mpi4py loaded: MPI version {MPI.Get_v
 }
 
 # Set OpenMP threads (important for hybrid MPI+OpenMP)
+# This automatically adapts to the number of CPUs allocated per task
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 echo "OMP_NUM_THREADS set to: $OMP_NUM_THREADS"
+echo "MPI Ranks: $SLURM_NTASKS (auto-detected from SLURM allocation)"
 
 # Create logs directory if not exists
 mkdir -p logs

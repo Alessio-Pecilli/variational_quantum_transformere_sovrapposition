@@ -252,7 +252,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
     return best_params
 
 
-def optimize_experimental_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_params=None, dim=16):
+def optimize_experimental_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_params=None, dim=16, opt_maxiter=40, opt_maxfev=60):
     """
     Optimization for experimental circuit with additional phase parameters.
     
@@ -265,6 +265,8 @@ def optimize_experimental_parameters(max_hours, num_iterations, num_layers, psi,
         Z (list): Current word unitaries
         best_params (array): Initial parameters (optional)
         dim (int): Dimension parameter
+        opt_maxiter (int): Maximum iterations for internal optimizer
+        opt_maxfev (int): Maximum function evaluations for internal optimizer
         
     Returns:
         array: Optimized parameters
