@@ -130,20 +130,23 @@ def train_with_beast_mode_parallelization(logger):
 
         
             params_correnti = best_params if best_params is not None else params
+            print(f"🧪 type(params) = {type(params)} shape = {getattr(params, 'shape', None)}")
+            print(f"🧪 type(best_params) = {type(best_params)} shape = {getattr(best_params, 'shape', None)}")
 
             best_params = optimize_parameters_parallel(
-    params=params_correnti,
-    shift=0,  # o il valore corretto che usi altrove
+    params_correnti,
+    shift=OPTIMIZATION_CONFIG.get('shift', 0.01),
     states_calculated=states_calculated,
     U=U,
     Z=Z,
     num_layers=OPTIMIZATION_CONFIG['num_layers'],
     embedding_dim=OPTIMIZATION_CONFIG['embedding_dim'],
-    circuit_func=circuit_function,  
+    circuit_func=None,
     num_workers=None,
-    opt_maxiter=OPTIMIZATION_CONFIG['opt_maxiter'],
-    opt_maxfev=OPTIMIZATION_CONFIG['opt_maxfev']
+    opt_maxiter=OPTIMIZATION_CONFIG.get('opt_maxiter', 150),
+    opt_maxfev=OPTIMIZATION_CONFIG.get('opt_maxfev', 50)
 )
+
 
         else:
             print("⚠️ Nessuno stato valido, salto ottimizzazione per questa frase.")
