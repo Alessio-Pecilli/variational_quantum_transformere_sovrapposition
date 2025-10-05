@@ -134,10 +134,11 @@ def train_with_beast_mode_parallelization(logger):
     U,
     Z,
     best_params,
-    embedding_dim=OPTIMIZATION_CONFIG['embedding_dim'],
+    OPTIMIZATION_CONFIG['embedding_dim'],
     opt_maxiter=OPTIMIZATION_CONFIG['opt_maxiter'],
     opt_maxfev=OPTIMIZATION_CONFIG['opt_maxfev']
 )
+
 
         else:
             print("⚠️ Nessuno stato valido, salto ottimizzazione per questa frase.")
