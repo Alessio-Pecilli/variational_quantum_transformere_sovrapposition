@@ -4,7 +4,7 @@
 #SBATCH --error=quantum_training_%j.log
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=32
 #SBATCH --time=02:00:00
 #SBATCH --partition=boost_usr_prod
 #SBATCH --account=try25_rosati
@@ -24,9 +24,10 @@ source $WORK/venv_py311/bin/activate
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export SLURM_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
-echo "🖥️ CONFIGURAZIONE HPC (MULTIPROCESSING):"
+echo "� CONFIGURAZIONE HPC BEAST MODE (32 CORES!):"
 echo "  Job ID: $SLURM_JOB_ID"
 echo "  CPUs per task: $SLURM_CPUS_PER_TASK"
+echo "  Workers disponibili: $((SLURM_CPUS_PER_TASK - 1))"
 
 cd $WORK/variational_quantum_transformere_sovrapposition || {
     echo "❌ ERRORE: Directory progetto non trovata!"
