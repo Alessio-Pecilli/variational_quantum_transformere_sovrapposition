@@ -126,19 +126,21 @@ def train_with_beast_mode_parallelization(logger):
         if len(states_calculated) > 0:
             print(f"🚀 Avvio ottimizzazione parallela per la frase {sentence_idx + 1}")
 
-            best_params = optimize_parameters_parallel(
-    OPTIMIZATION_CONFIG['max_hours'],
-    OPTIMIZATION_CONFIG['num_iterations'],
-    OPTIMIZATION_CONFIG['num_layers'],
-    states_calculated,
-    U,
-    Z,
-    best_params,
-    OPTIMIZATION_CONFIG['embedding_dim'],
-    opt_maxiter=OPTIMIZATION_CONFIG['opt_maxiter'],
-    opt_maxfev=OPTIMIZATION_CONFIG['opt_maxfev']
-)
+        
+            params_correnti = best_params if best_params is not None else params
 
+            best_params = optimize_parameters_parallel(
+                OPTIMIZATION_CONFIG['max_hours'],
+                OPTIMIZATION_CONFIG['num_iterations'],
+                OPTIMIZATION_CONFIG['num_layers'],
+                states_calculated,
+                U,
+                Z,
+                params_correnti,
+                OPTIMIZATION_CONFIG['embedding_dim'],
+                opt_maxiter=OPTIMIZATION_CONFIG['opt_maxiter'],
+                opt_maxfev=OPTIMIZATION_CONFIG['opt_maxfev'] 
+                            )
 
         else:
             print("⚠️ Nessuno stato valido, salto ottimizzazione per questa frase.")
