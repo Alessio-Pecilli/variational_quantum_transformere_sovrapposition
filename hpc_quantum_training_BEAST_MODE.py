@@ -7,6 +7,7 @@ Risolve tutti i problemi: single worker, batch overhead, loss mancante
 import traceback
 import sys
 import time
+from quantum_circuits import get_circuit_function
 import logging
 from pathlib import Path
 import os
@@ -121,6 +122,7 @@ def train_with_beast_mode_parallelization(logger):
         # Stati quantistici
         states = encoding.stateVectors[sentence_idx]
         states_calculated, U, Z = process_sentence_states(states)
+        circuit_function = get_circuit_function(len(states_calculated))
 
         # Se abbiamo stati validi, parte l’ottimizzazione
         if len(states_calculated) > 0:
@@ -130,17 +132,18 @@ def train_with_beast_mode_parallelization(logger):
             params_correnti = best_params if best_params is not None else params
 
             best_params = optimize_parameters_parallel(
-                OPTIMIZATION_CONFIG['max_hours'],
-                OPTIMIZATION_CONFIG['num_iterations'],
-                OPTIMIZATION_CONFIG['num_layers'],
-                states_calculated,
-                U,
-                Z,
-                params_correnti,
-                OPTIMIZATION_CONFIG['embedding_dim'],
-                opt_maxiter=OPTIMIZATION_CONFIG['opt_maxiter'],
-                opt_maxfev=OPTIMIZATION_CONFIG['opt_maxfev'] 
-                            )
+    params=params_correnti,
+    shift=0,  # o il valore corretto che usi altrove
+    states_calculated=states_calculated,
+    U=U,
+    Z=Z,
+    num_layers=OPTIMIZATION_CONFIG['num_layers'],
+    embedding_dim=OPTIMIZATION_CONFIG['embedding_dim'],
+    circuit_func=circuit_function,  
+    num_workers=None,
+    opt_maxiter=OPTIMIZATION_CONFIG['opt_maxiter'],
+    opt_maxfev=OPTIMIZATION_CONFIG['opt_maxfev']
+)
 
         else:
             print("⚠️ Nessuno stato valido, salto ottimizzazione per questa frase.")
