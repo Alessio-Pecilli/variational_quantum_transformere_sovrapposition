@@ -446,137 +446,46 @@ def optimize_experimental_parameters(max_hours, num_iterations, num_layers, psi,
             print("Partial results saved. Clean exit.")
     
     return best_params
-
-def optimize_parameters_parallel(max_hours, num_iterations, num_layers, states_calculated, U, Z,
-                                 best_params=None, dim=4, opt_maxiter=10, opt_maxfev=20):
+def optimize_parameters_parallel(params, shift, states_calculated, U, Z, num_layers,
+                                 embedding_dim, circuit_func, num_workers=None,
+                                 opt_maxiter=150, opt_maxfev=50):
     """
-    Versione parallela di optimize_parameters() con calcolo distribuito dei gradienti.
-    Mantiene la logica fisica originale ma parallelizza la loss function.
+    Esegue ottimizzazione parallela dei parametri variationali.
+    Ogni worker calcola un batch di gradienti.
     """
+    import logging
+    from multiprocessing import Pool
+    logger = logging.getLogger(__name__)
 
-    import numpy as np
-    import time
-    from multiprocessing import Pool, cpu_count
-    from quantum_circuits import get_circuit_function
-    from quantum_utils import get_params
-    from quantum_mpi_utils import _compute_single_gradient_component  # esistente
-    import os
+    num_params = len(params)
+    if num_workers is None:
+        num_workers = get_hpc_workers_max()
 
-    # ------------------------------------------------------------
-    # 🧩 SETUP PARAMETRI E CONFIGURAZIONE
-    # ------------------------------------------------------------
-    def get_hpc_workers_max():
-        """Rileva automaticamente il numero massimo di core HPC"""
-        omp = os.environ.get('OMP_NUM_THREADS')
-        slurm = os.environ.get('SLURM_CPUS_PER_TASK')
-        if slurm and int(slurm) > 1:
-            return int(slurm)
-        elif omp and int(omp) > 1:
-            return int(omp)
-        else:
-            return max(1, cpu_count() - 1)
+    logger.info(f"🚀 Parallelizzazione attiva: {num_workers} worker")
+    logger.info(f"🧠 Parametri totali: {num_params}")
 
-    def create_smart_batches(num_params, num_workers):
-        """Crea batch bilanciati per ridurre overhead"""
-        target_batches = min(num_workers * 2, 20)
-        batch_size = max(1, num_params // target_batches)
-        return [list(range(i, min(i + batch_size, num_params)))
-                for i in range(0, num_params, batch_size)]
+    # Crea i batch di lavoro
+    batch_list = create_smart_batches(num_params, num_workers)
+    logger.info(f"🧩 Suddivisione in {len(batch_list)} batch")
 
-    def compute_gradient_batch(batch_data):
-        """Worker: calcola gradienti di un batch di parametri"""
-        param_indices, params, shift, states_calc, U, Z, num_layers, dim, circuit_func = batch_data
-        grads = []
-        for idx in param_indices:
-            grad = _compute_single_gradient_component(
-                idx, params, shift, states_calc, U, Z,
-                num_layers, dim, circuit_func
-            )
-            grads.append(grad)
-        return param_indices, grads
-
-    # ------------------------------------------------------------
-    # ⚙️ INIZIALIZZAZIONE
-    # ------------------------------------------------------------
+    results = []
     start_time = time.time()
-    param_shape = get_params(2, num_layers).shape
-    n_params = np.prod(param_shape)
-    num_params = 2 * n_params  # V e K
 
-    if best_params is None:
-        params = np.random.randn(num_params)
-        print(f"🧠 Parametri inizializzati casualmente ({num_params} totali)")
-    else:
-        params = np.array(best_params).flatten().copy()
-        print(f"🔁 Ripreso training con parametri esistenti ({num_params} totali)")
-
-    max_workers = get_hpc_workers_max()
-    print(f"🚀 Parallelizzazione attiva: {max_workers} worker")
-
-    # Circuit function da usare per calcolo loss
-    circuit_func = get_circuit_function(len(states_calculated))
-    shift = np.pi / 2
-    learning_rate = 0.01
-
-    # ------------------------------------------------------------
-    # 🧮 CICLO DI OTTIMIZZAZIONE
-    # ------------------------------------------------------------
-    for iteration in range(num_iterations):
-        iter_start = time.time()
-        print(f"\n{'=' * 60}")
-        print(f"🔁 ITERAZIONE {iteration + 1}/{num_iterations}")
-        print(f"{'=' * 60}")
-
-        # 1️⃣ Calcolo loss corrente
-        loss_val = circuit_func(
-            states_calculated, U, Z,
-            params[:n_params].reshape(param_shape),
-            params[n_params:].reshape(param_shape),
-            num_layers, dim
-        )
-
-        print(f"📉 Loss attuale: {np.real(loss_val):.6f}")
-
-        # 2️⃣ Crea batch per calcolo gradiente
-        batches = create_smart_batches(num_params, max_workers)
+    # 🔥 Esecuzione parallela vera (usa la funzione globale)
+    with Pool(num_workers) as pool:
         batch_tasks = [
-            (batch, params, shift, states_calculated, U, Z, num_layers, dim, circuit_func)
-            for batch in batches
+            (batch, params, shift, states_calculated, U, Z, num_layers, embedding_dim, circuit_func)
+            for batch in batch_list
         ]
+        results = pool.map(compute_gradient_batch, batch_tasks)
 
-        # 3️⃣ Parallelizza calcolo gradienti
-        with Pool(processes=max_workers) as pool:
-            results = pool.map(compute_gradient_batch, batch_tasks)
+    # Ricompone i gradienti
+    gradients = np.zeros(num_params)
+    for param_indices, grads in results:
+        for i, grad in zip(param_indices, grads):
+            gradients[i] = grad
 
-        # 4️⃣ Ricostruisci gradiente completo
-        gradient = np.zeros(num_params)
-        for idx_list, grads in results:
-            for i, idx in enumerate(idx_list):
-                gradient[idx] = grads[i]
+    elapsed = time.time() - start_time
+    logger.info(f"✅ Gradienti calcolati in {elapsed:.2f}s con {num_workers} worker")
 
-        grad_norm = np.linalg.norm(gradient)
-        print(f"🧮 Norm gradiente: {grad_norm:.6f}")
-
-        # 5️⃣ Gradient clipping per stabilità
-        max_grad_norm = 1.0
-        if grad_norm > max_grad_norm:
-            gradient *= (max_grad_norm / grad_norm)
-            print(f"⚠️ Gradient clipping: {grad_norm:.4f} → {max_grad_norm}")
-
-        # 6️⃣ Aggiornamento parametri
-        params -= learning_rate * gradient
-        elapsed = time.time() - iter_start
-
-        print(f"✅ Aggiornamento completato ({elapsed:.2f}s)")
-        print(f"Nuova loss stimata: {np.real(loss_val):.6f}")
-
-        # 7️⃣ Stop se tempo limite superato
-        if (time.time() - start_time) / 3600 > max_hours:
-            print("⏰ Tempo massimo raggiunto, stop ottimizzazione")
-            break
-
-    print("\n🏁 Ottimizzazione parallela completata")
-    print(f"Tempo totale: {(time.time() - start_time):.1f}s")
-
-    return params
-
+    return gradients
