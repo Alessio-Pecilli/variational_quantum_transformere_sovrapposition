@@ -53,39 +53,85 @@ echo "Exit code: $EXIT_CODE"
 echo "Ended at: $(date)"
 echo "Duration: $SECONDS sec"
 
-# === Prepara report ===
+# === Prepara report COMPLETO per email ===
 REPORT="logs/report_${SLURM_JOB_ID}.txt"
 {
-    echo "=== JOB CINECA - RISULTATI COMPLETI ==="
+    echo "=== 📧 JOB CINECA - RISULTATI COMPLETI 📧 ==="
     echo "Job ID: $SLURM_JOB_ID"
     echo "Host: $(hostname)"
-    echo "Data completamento: $(date)"
+    echo "Data inizio: $(date)"
     echo "Exit code: $EXIT_CODE"
+    echo "Durata: $SECONDS secondi"
     echo ""
-    echo "=== ULTIME 50 RIGHE DEL LOG PRINCIPALE ==="
+    echo "=== 📋 LOG PRINCIPALE COMPLETO ==="
     echo ""
-    tail -n 50 logs/job_${SLURM_JOB_ID}.out
+    cat logs/job_${SLURM_JOB_ID}.out
     echo ""
     
     # Aggiungi log debug se presente
     if [ -f "logs/debug_${SLURM_JOB_ID}.log" ]; then
-        echo "=== LOG DEBUG DETTAGLIATO ==="
+        echo "=== 🔍 LOG DEBUG DETTAGLIATO ==="
         echo ""
         cat logs/debug_${SLURM_JOB_ID}.log
         echo ""
+    else
+        echo "⚠️  File debug non trovato: logs/debug_${SLURM_JOB_ID}.log"
+        echo ""
     fi
     
-    echo "=== FINE REPORT ==="
+    # Aggiungi info ambiente
+    echo "=== 🖥️  INFORMAZIONI AMBIENTE ==="
+    echo "SLURM_JOB_ID: $SLURM_JOB_ID"
+    echo "SLURM_CPUS_PER_TASK: $SLURM_CPUS_PER_TASK"
+    echo "OMP_NUM_THREADS: $OMP_NUM_THREADS"
+    echo "Working directory: $(pwd)"
+    echo "Python version: $(python --version 2>&1)"
+    echo ""
+    
+    echo "=== 📁 FILE GENERATI ==="
+    ls -la logs/ 2>/dev/null || echo "Directory logs non trovata"
+    echo ""
+    
+    echo "=== 🏁 FINE REPORT ==="
 } > "$REPORT"
 
-# === Invio mail con allegato ===
+# === Mostra report completo nel log principale ===
+echo ""
+echo "=== REPORT COMPLETO JOB $SLURM_JOB_ID ==="
+cat "$REPORT"
+echo "=== FINE REPORT ==="
+echo ""
+
+# === Invio email GARANTITO ===
+echo "📧 Preparazione invio email..."
+
+# Prova mailx (metodo principale)
 if command -v mailx >/dev/null 2>&1; then
-    echo "Invio email dettagliata con log allegato..."
-    mailx -s "[CINECA JOB] Risultato job $SLURM_JOB_ID (Exit $EXIT_CODE)" \
-          -a "logs/job_${SLURM_JOB_ID}.out" \
-          ale.pecilli@stud.uniroma3.it < "$REPORT"
+    echo "   Usando mailx..."
+    mailx -s "[🚀 CINECA] Job $SLURM_JOB_ID - Exit $EXIT_CODE - $(date)" \
+          ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        echo "   ✅ Email inviata con mailx"
+    else
+        echo "   ❌ Errore mailx, provo mail..."
+        # Fallback a mail
+        mail -s "[🚀 CINECA] Job $SLURM_JOB_ID - Exit $EXIT_CODE" \
+             ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null || \
+        echo "   ❌ Anche mail fallito"
+    fi
 else
-    echo "⚠️ mailx non trovato. Log salvato in $REPORT"
+    # Prova mail diretto
+    echo "   mailx non disponibile, provo mail..."
+    mail -s "[🚀 CINECA] Job $SLURM_JOB_ID - Exit $EXIT_CODE" \
+         ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null || \
+    echo "   ❌ mail non funziona"
 fi
+
+# Log finale
+echo ""
+echo "📋 Report completo salvato in: $REPORT"
+echo "� Dimensione report: $(wc -l < "$REPORT") righe"
+echo "📧 Se non ricevi email, controlla il file: $REPORT"
 
 exit $EXIT_CODE

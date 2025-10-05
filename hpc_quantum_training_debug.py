@@ -95,12 +95,16 @@ def safe_import(module_name, logger):
             logger.info("   Encoding class caricata")
             return True
         elif module_name == "quantum_circuits":
-            from quantum_circuits import create_superposition_circuit, calculate_loss_and_gradient
+            from quantum_circuits import get_circuit_function
             logger.info("   Quantum circuits caricati")
             return True
         elif module_name == "quantum_mpi_utils":
-            from quantum_mpi_utils import get_hpc_workers
+            from quantum_mpi_utils import loss_and_grad_for_sentence
             logger.info("   MPI utils caricati")
+            return True
+        elif module_name == "main_superposition":
+            from main_superposition import process_sentence_states
+            logger.info("   Main superposition caricato")
             return True
         else:
             exec(f"import {module_name}")
@@ -114,10 +118,30 @@ def safe_import(module_name, logger):
             logger.error(f"   {line}")
         return False
 
+def get_hpc_workers():
+    """Auto-detect workers per HPC (copia da hpc_quantum_training.py)"""
+    omp = os.environ.get('OMP_NUM_THREADS')
+    slurm = os.environ.get('SLURM_CPUS_PER_TASK')
+    pbs = os.environ.get('PBS_NP')
+    
+    if omp and int(omp) > 1: 
+        workers = int(omp)
+        source = "OMP_NUM_THREADS"
+    elif slurm and int(slurm) > 1: 
+        workers = int(slurm)
+        source = "SLURM_CPUS_PER_TASK"
+    elif pbs and int(pbs) > 1: 
+        workers = int(pbs)
+        source = "PBS_NP"
+    else:
+        workers = cpu_count()
+        source = "CPU_COUNT"
+    
+    return workers
+
 def get_safe_worker_count(logger):
     """Determina numero workers sicuro per HPC"""
     try:
-        from quantum_mpi_utils import get_hpc_workers
         detected_workers = get_hpc_workers()
         logger.info(f"📊 Workers rilevati automaticamente: {detected_workers}")
         
@@ -139,7 +163,7 @@ def test_single_calculation(logger):
         
         from config import TRAINING_SENTENCES
         from encoding import Encoding
-        from quantum_circuits import calculate_loss_and_gradient
+        from quantum_mpi_utils import loss_and_grad_for_sentence
         
         # Prima sentence più semplice
         sentence = TRAINING_SENTENCES[0]
@@ -148,16 +172,16 @@ def test_single_calculation(logger):
         encoding = Encoding(sentence)
         logger.info(f"   Encoding creato: {encoding.n_qubits} qubits")
         
-        # Parametri iniziali
+        # Parametri iniziali (come nel codice funzionante)
         n_params = 2 * encoding.n_qubits
         params = np.random.uniform(0, 2*np.pi, n_params)
         sentence_data = (sentence, encoding, len(sentence.split()))
         
         logger.info(f"   Parametri: {n_params} (shape: {params.shape})")
         
-        # Calcolo con timeout
+        # Calcolo con timeout usando la funzione corretta
         with timeout_context(30, logger):
-            loss, grad = calculate_loss_and_gradient(params, sentence_data)
+            loss, grad = loss_and_grad_for_sentence(params, sentence_data)
             
         logger.info(f"   ✅ Loss: {loss:.6f}, Grad norm: {np.linalg.norm(grad):.6f}")
         return True, (params, sentence_data)
@@ -171,7 +195,7 @@ def test_multiprocessing_safe(workers, test_data, logger):
     try:
         logger.info(f"🔥 TEST: Multiprocessing con {workers} workers...")
         
-        from quantum_circuits import calculate_loss_and_gradient
+        from quantum_mpi_utils import loss_and_grad_for_sentence
         params, sentence_data = test_data
         
         # Test con timeout più lungo
@@ -183,7 +207,7 @@ def test_multiprocessing_safe(workers, test_data, logger):
                 tasks = [(params, sentence_data) for _ in range(2)]
                 
                 logger.info("   Invio tasks al pool...")
-                results = pool.starmap(calculate_loss_and_gradient, tasks)
+                results = pool.starmap(loss_and_grad_for_sentence, tasks)
                 
                 logger.info(f"   ✅ Completato: {len(results)} risultati")
                 
@@ -223,7 +247,7 @@ def main():
         logger.info("STEP 1: IMPORTAZIONI")
         logger.info("="*40)
         
-        modules = ["numpy", "config", "encoding", "quantum_circuits", "quantum_mpi_utils"]
+        modules = ["numpy", "config", "encoding", "quantum_circuits", "quantum_mpi_utils", "main_superposition"]
         for module in modules:
             if not safe_import(module, logger):
                 logger.error(f"💥 STOP: Impossibile importare {module}")
@@ -263,7 +287,7 @@ def main():
         # Import per training
         from config import TRAINING_SENTENCES, OPTIMIZATION_CONFIG
         from encoding import Encoding
-        from quantum_circuits import calculate_loss_and_gradient
+        from quantum_mpi_utils import loss_and_grad_for_sentence
         
         logger.info(f"⚡ Inizio training con {workers} workers...")
         logger.info(f"📊 Configurazione: {OPTIMIZATION_CONFIG}")
@@ -285,12 +309,12 @@ def main():
             logger.info(f"   Pool training creato con {workers} workers")
             
             # Calcolo loss attuale
-            loss, _ = calculate_loss_and_gradient(params, sentence_data)
+            loss, _ = loss_and_grad_for_sentence(params, sentence_data)
             logger.info(f"   Loss iniziale: {loss:.6f}")
             
             # Esempio calcolo gradiente (versione semplificata)
             tasks = [(params, sentence_data) for _ in range(3)]
-            results = pool.starmap(calculate_loss_and_gradient, tasks)
+            results = pool.starmap(loss_and_grad_for_sentence, tasks)
             
             logger.info(f"   ✅ Calcolo parallelo completato: {len(results)} risultati")
         
