@@ -212,7 +212,7 @@ def _compute_single_gradient_component(param_index, params, shift, psi, U, Z, nu
     worker_pid = os.getpid()
     start_time = time.time()
     
-    # Determine parameter shape
+    # Determine parameter shape  
     n_params_single = len(params) // 2
     param_shape = get_params(2, num_layers).shape
     

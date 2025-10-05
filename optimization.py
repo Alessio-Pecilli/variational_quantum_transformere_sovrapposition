@@ -455,6 +455,7 @@ def optimize_parameters_parallel(params, shift, states_calculated, U, Z, num_lay
     """
     import logging
     from multiprocessing import Pool
+    from quantum_utils import get_params
     logger = logging.getLogger(__name__)
 
     num_params = len(params)
@@ -495,9 +496,9 @@ def optimize_parameters_parallel(params, shift, states_calculated, U, Z, num_lay
         if circuit_func is None:
             circuit_func = get_circuit_function(len(states_calculated))
         
-        # Parametri in forma matriciale
+        # Parametri in forma matriciale - usa get_params per ottenere la forma corretta
         n_params_single = num_params // 2
-        param_shape = (num_layers, 2)  # Assumi 2 qubit per layer
+        param_shape = get_params(2, num_layers).shape  # Forma corretta dai quantum_utils
         
         pV = current_params[:n_params_single].reshape(param_shape)
         pK = current_params[n_params_single:].reshape(param_shape)
