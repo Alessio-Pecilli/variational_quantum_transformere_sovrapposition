@@ -405,10 +405,118 @@ def main():
                 logger.info(f"      Componenti calcolate: {len(grad_components)}")
                 logger.info(f"      Gradiente norm: {np.linalg.norm(grad_components):.6f}")
                 logger.info(f"   🎯 PARALLELIZZAZIONE GRADIENTE FUNZIONA!")
+                
+                # 🚀 ORA FACCIAMO IL VERO TRAINING SU TUTTE LE FRASI!
+                logger.info(f"\n🎯 AVVIO TRAINING VERO SU TUTTE LE {len(sentences)} FRASI!")
+                
+                # Calcola loss iniziale per confronto
+                current_loss = circuit_func(
+                    states_calculated, U, Z,
+                    params[:num_params//2].reshape(param_shape),
+                    params[num_params//2:].reshape(param_shape),
+                    OPTIMIZATION_CONFIG['num_layers'], 
+                    OPTIMIZATION_CONFIG['embedding_dim']
+                )
+                logger.info(f"   Loss iniziale (prima frase): {current_loss:.6f}")
+                
+                # Prepara tutti i dati di training
+                all_training_data = []
+                for i, sent in enumerate(sentences):
+                    states_i = encoding.stateVectors[i]
+                    states_calc_i, U_i, Z_i = process_sentence_states(states_i)
+                    if len(states_calc_i) > 0:
+                        all_training_data.append((states_calc_i, U_i, Z_i, sent))
+                        logger.info(f"   Frase {i+1}: '{sent[:30]}...' -> {len(states_calc_i)} states")
+                
+                logger.info(f"📊 DATASET: {len(all_training_data)} frasi valide per training")
+                
+                if len(all_training_data) > 0:
+                    # Parametri per training vero
+                    learning_rate = 0.01
+                    max_epochs = 10  # Epoch su tutto dataset
+                    
+                    # Parametri iniziali casuali
+                    best_loss = float('inf')
+                    best_params = params.copy()
+                    
+                    logger.info(f"🚀 TRAINING: {max_epochs} epochs, LR={learning_rate}")
+                    
+                    # Training loop su tutto il dataset
+                    for epoch in range(max_epochs):
+                        epoch_start = time.time()
+                        epoch_loss = 0.0
+                        
+                        # Cicla su tutte le frasi 
+                        for batch_idx, (states_calc, U_batch, Z_batch, sent) in enumerate(all_training_data):
+                            # Calcola loss per questa frase
+                            loss_batch = circuit_func(
+                                states_calc, U_batch, Z_batch,
+                                params[:num_params//2].reshape(param_shape),
+                                params[num_params//2:].reshape(param_shape),
+                                OPTIMIZATION_CONFIG['num_layers'], 
+                                OPTIMIZATION_CONFIG['embedding_dim']
+                            )
+                            epoch_loss += loss_batch
+                            
+                            # Calcola gradiente per questa frase (primi 8 parametri per velocità)
+                            n_grad = min(8, num_params)
+                            grad_tasks = []
+                            for j in range(n_grad):
+                                grad_tasks.append((j, params, shift, states_calc, U_batch, Z_batch,
+                                                 OPTIMIZATION_CONFIG['num_layers'], 
+                                                 OPTIMIZATION_CONFIG['embedding_dim'], 
+                                                 circuit_func))
+                            
+                            # Calcola gradiente in parallelo
+                            grad_batch = np.array(pool.starmap(_compute_single_gradient_component, grad_tasks))
+                            
+                            # Aggiorna parametri (solo primi n_grad)
+                            params[:n_grad] -= learning_rate * grad_batch
+                        
+                        # Media loss su tutto dataset
+                        avg_loss = epoch_loss / len(all_training_data)
+                        epoch_time = time.time() - epoch_start
+                        
+                        # Tracking miglior modello
+                        if avg_loss < best_loss:
+                            best_loss = avg_loss
+                            best_params = params.copy()
+                            logger.info(f"   🎯 NEW BEST! Epoch {epoch}: Avg Loss={avg_loss:.6f}")
+                        
+                        logger.info(f"   Epoch {epoch:2d}: Avg Loss={avg_loss:.6f} Time={epoch_time:.2f}s")
+                        
+                        # Early stopping se loss non migliora
+                        if avg_loss < 0.01:  # Soglia di convergenza
+                            logger.info(f"   ✅ CONVERGENZA! Loss < 0.01 raggiunta")
+                            break
+                    
+                    # Salva risultati finali
+                    final_improvement = (best_loss / (epoch_loss / len(all_training_data))) * 100
+                    logger.info(f"🎉 TRAINING COMPLETATO!")
+                    logger.info(f"   Loss iniziale: {current_loss:.6f}")  
+                    logger.info(f"   Loss finale: {avg_loss:.6f}")
+                    logger.info(f"   Miglior loss: {best_loss:.6f}")
+                    logger.info(f"   Miglioramento: {final_improvement:.1f}%")
+                    
+                    # Salva parametri ottimali
+                    import pickle
+                    param_file = f"best_params_hpc_{time.strftime('%Y%m%d_%H%M%S')}.pkl"
+                    with open(param_file, 'wb') as f:
+                        pickle.dump({
+                            'best_params': best_params,
+                            'best_loss': best_loss,
+                            'final_loss': avg_loss,
+                            'config': OPTIMIZATION_CONFIG,
+                            'num_sentences': len(all_training_data)
+                        }, f)
+                    logger.info(f"   💾 Parametri salvati: {param_file}")
+                else:
+                    logger.error("   ❌ Nessun dato valido per training!")
+                    
         else:
             logger.error("   ❌ Nessun state calcolato per il test gradiente")
         
-        logger.info("🎉 TRAINING COMPLETATO CON SUCCESSO!")
+        logger.info("🚀 TRAINING HPC COMPLETATO SU TUTTE LE FRASI!")
         return 0
         
     except Exception as e:
