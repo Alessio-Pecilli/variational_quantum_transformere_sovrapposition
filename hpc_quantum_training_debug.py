@@ -198,8 +198,8 @@ def test_single_calculation(logger):
                 # Setup per calcolo gradiente COME NEL MAIN
                 circuit_func = get_circuit_function(len(states_calculated))
                 psi = states_calculated[0]  # Primo stato per test
-                U_test = U[0] if U else None
-                Z_test = Z[0] if Z else None
+                U_test = [U[0]] if U else None  # Keep as list
+                Z_test = [Z[0]] if Z else None  # Keep as list
                 
                 # Test calcolo loss singolo
                 from quantum_mpi_utils import _compute_single_gradient_component
@@ -207,7 +207,7 @@ def test_single_calculation(logger):
                 
                 # Test gradiente per primo parametro
                 grad_comp = _compute_single_gradient_component(
-                    0, params, shift, psi, [U_test], [Z_test], 
+                    0, params, shift, states_calculated, U, Z, 
                     OPTIMIZATION_CONFIG['num_layers'], 
                     OPTIMIZATION_CONFIG['embedding_dim'], 
                     circuit_func
@@ -243,10 +243,10 @@ def test_multiprocessing_safe(workers, test_data, logger):
                 logger.info(f"   Pool creato con {workers} workers")
                 
                 # Test calcolo gradiente parallelo per primi N parametri
-                circuit_func = get_circuit_function(len(sentence.split()))
+                circuit_func = get_circuit_function(len(states_calculated))
                 psi = states_calculated[0]
-                U_test = [U[0]] if U else []
-                Z_test = [Z[0]] if Z else []
+                U_test = [U[0]] if U else None  # Keep as list
+                Z_test = [Z[0]] if Z else None  # Keep as list
                 shift = np.pi / 2
                 
                 # Parallelizza calcolo gradiente per primi 4 parametri
@@ -255,7 +255,7 @@ def test_multiprocessing_safe(workers, test_data, logger):
                 
                 tasks = []
                 for i in range(n_test_params):
-                    task_args = (i, params, shift, psi, U_test, Z_test,
+                    task_args = (i, params, shift, states_calculated, U, Z,
                                 OPTIMIZATION_CONFIG['num_layers'], 
                                 OPTIMIZATION_CONFIG['embedding_dim'], 
                                 circuit_func)
@@ -370,8 +370,8 @@ def main():
             
             circuit_func = get_circuit_function(len(states_calculated))
             psi = states_calculated[0]
-            U_test = [U[0]] if U else []
-            Z_test = [Z[0]] if Z else []
+            U_test = [U[0]] if U else None  # Keep as list
+            Z_test = [Z[0]] if Z else None  # Keep as list
             shift = np.pi / 2
             
             # Parametri per test
@@ -391,7 +391,7 @@ def main():
                 
                 tasks = []
                 for i in range(n_test_params):
-                    task_args = (i, params, shift, psi, U_test, Z_test,
+                    task_args = (i, params, shift, states_calculated, U, Z,
                                 OPTIMIZATION_CONFIG['num_layers'], 
                                 OPTIMIZATION_CONFIG['embedding_dim'], 
                                 circuit_func)

@@ -1,0 +1,49 @@
+2025-10-05 10:40:13,683 [INFO] ============================================================
+2025-10-05 10:40:13,686 [INFO] ============================================================
+2025-10-05 10:40:13,686 [INFO]    OMP_NUM_THREADS: Non definita
+2025-10-05 10:40:13,686 [INFO]    SLURM_CPUS_PER_TASK: Non definita
+2025-10-05 10:40:13,686 [INFO]    SLURM_JOB_ID: Non definita
+2025-10-05 10:40:13,686 [INFO]    SLURM_NTASKS: Non definita
+2025-10-05 10:40:13,686 [INFO]    PBS_NP: Non definita
+2025-10-05 10:40:13,687 [INFO]    SLURM_NPROCS: Non definita
+2025-10-05 10:40:13,687 [INFO]    Python version: 3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]
+2025-10-05 10:40:13,687 [INFO]    CPU count (physical): 12
+2025-10-05 10:40:13,687 [INFO]    Working directory: C:\Users\Ale\Desktop\progetti\FIN - QT
+2025-10-05 10:40:13,789 [INFO]    Memoria totale: 16.0 GB
+2025-10-05 10:40:13,790 [INFO]    Memoria disponibile: 2.4 GB
+2025-10-05 10:40:13,790 [INFO] 
+========================================
+2025-10-05 10:40:13,790 [INFO] STEP 1: IMPORTAZIONI
+2025-10-05 10:40:13,790 [INFO] ========================================
+2025-10-05 10:40:13,792 [INFO]    numpy importato con successo
+2025-10-05 10:40:13,794 [INFO]    Config caricato: 8 sentences
+2025-10-05 10:40:13,796 [INFO]    Encoding class caricata
+2025-10-05 10:40:16,344 [INFO]    Quantum circuits caricati
+2025-10-05 10:40:16,346 [INFO]    MPI utils caricati
+2025-10-05 10:40:16,722 [INFO]    Main superposition caricato
+2025-10-05 10:40:16,722 [INFO] 
+========================================
+2025-10-05 10:40:16,722 [INFO] STEP 2: CONFIGURAZIONE WORKERS
+2025-10-05 10:40:16,722 [INFO] ========================================
+2025-10-05 10:40:16,725 [INFO] 
+========================================
+2025-10-05 10:40:16,725 [INFO] STEP 3: TEST CALCOLO SINGOLO
+2025-10-05 10:40:16,725 [INFO] ========================================
+2025-10-05 10:40:16,727 [INFO]    Sentence: 'The cat flies'
+2025-10-05 10:40:16,728 [INFO]    Encoding creato: 8 state vectors
+2025-10-05 10:40:16,728 [INFO]    Parametri: 144 (V:72, K:72, shape: (144,))
+2025-10-05 10:40:16,735 [INFO]    States calculated: 2
+2025-10-05 10:40:17,707 [INFO] 
+========================================
+2025-10-05 10:40:17,707 [INFO] STEP 4: TEST MULTIPROCESSING
+2025-10-05 10:40:17,707 [INFO] ========================================
+2025-10-05 10:40:17,817 [INFO]    Pool creato con 12 workers
+2025-10-05 10:40:17,817 [INFO]    Test gradiente parallelo per 4 parametri...
+2025-10-05 10:40:17,818 [INFO]    Invio tasks al pool...
+2025-10-05 10:40:22,986 [INFO] 
+========================================
+2025-10-05 10:40:22,986 [INFO] STEP 5: TRAINING REALE
+2025-10-05 10:40:22,986 [INFO] ========================================
+2025-10-05 10:40:22,992 [INFO]    State vectors disponibili: 8
+2025-10-05 10:40:23,104 [INFO]       Parametri totali: 144
+2025-10-05 10:40:23,104 [INFO]       Test su 8 parametri...
