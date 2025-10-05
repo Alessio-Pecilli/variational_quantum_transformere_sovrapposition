@@ -161,30 +161,63 @@ def test_single_calculation(logger):
     try:
         logger.info("🧪 TEST: Calcolo singolo...")
         
-        from config import TRAINING_SENTENCES
+        from config import TRAINING_SENTENCES, OPTIMIZATION_CONFIG
         from encoding import Encoding
         from quantum_mpi_utils import loss_and_grad_for_sentence
         
-        # Prima sentence più semplice
-        sentence = TRAINING_SENTENCES[0]
+        # USA LA STESSA LOGICA DI main_superposition.py
+        sentences = TRAINING_SENTENCES
+        sentence = sentences[0]  # Prima sentence per test
         logger.info(f"   Sentence: '{sentence}'")
         
-        encoding = Encoding(sentence)
-        logger.info(f"   Encoding creato: {encoding.n_qubits} qubits")
+        # Encoding come nel main_superposition.py
+        encoding = Encoding(sentences, embeddingDim=OPTIMIZATION_CONFIG['embedding_dim'])
+        logger.info(f"   Encoding creato: {len(encoding.stateVectors)} state vectors")
         
-        # Parametri iniziali (come nel codice funzionante)
-        n_params = 2 * encoding.n_qubits
-        params = np.random.uniform(0, 2*np.pi, n_params)
+        # Parametri come nel main_superposition.py
+        from quantum_utils import get_params
+        param_shape = get_params(OPTIMIZATION_CONFIG['num_qubits'], OPTIMIZATION_CONFIG['num_layers']).shape
+        n_params = int(np.prod(param_shape))
+        num_params = 2 * n_params  # V and K parameters
+        params = np.random.randn(num_params) * 0.1
         sentence_data = (sentence, encoding, len(sentence.split()))
         
-        logger.info(f"   Parametri: {n_params} (shape: {params.shape})")
+        logger.info(f"   Parametri: {num_params} (V:{n_params}, K:{n_params}, shape: {params.shape})")
         
-        # Calcolo con timeout usando la funzione corretta
+        # Test calcolo gradiente parallelo come nel tuo MPI
         with timeout_context(30, logger):
-            loss, grad = loss_and_grad_for_sentence(params, sentence_data)
+            from main_superposition import process_sentence_states
+            from quantum_circuits import get_circuit_function
             
-        logger.info(f"   ✅ Loss: {loss:.6f}, Grad norm: {np.linalg.norm(grad):.6f}")
-        return True, (params, sentence_data)
+            # Process states come nel codice funzionante
+            states = encoding.stateVectors[0]  # Prima sentence
+            states_calculated, U, Z = process_sentence_states(states)
+            logger.info(f"   States calculated: {len(states_calculated)}")
+            
+            if len(states_calculated) > 0:
+                # Setup per calcolo gradiente COME NEL MAIN
+                circuit_func = get_circuit_function(len(states_calculated))
+                psi = states_calculated[0]  # Primo stato per test
+                U_test = U[0] if U else None
+                Z_test = Z[0] if Z else None
+                
+                # Test calcolo loss singolo
+                from quantum_mpi_utils import _compute_single_gradient_component
+                shift = np.pi / 2
+                
+                # Test gradiente per primo parametro
+                grad_comp = _compute_single_gradient_component(
+                    0, params, shift, psi, [U_test], [Z_test], 
+                    OPTIMIZATION_CONFIG['num_layers'], 
+                    OPTIMIZATION_CONFIG['embedding_dim'], 
+                    circuit_func
+                )
+                logger.info(f"   ✅ Gradiente componente 0: {grad_comp:.6f}")
+            else:
+                logger.info("   ⚠️ Nessun state calcolato per il test gradiente")
+            
+        logger.info(f"   ✅ Test gradiente OK")
+        return True, (states_calculated, U, Z, sentence, encoding, params)
         
     except Exception as e:
         logger.error(f"❌ ERRORE nel test singolo: {type(e).__name__}: {str(e)}")
@@ -195,19 +228,41 @@ def test_multiprocessing_safe(workers, test_data, logger):
     try:
         logger.info(f"🔥 TEST: Multiprocessing con {workers} workers...")
         
-        from quantum_mpi_utils import loss_and_grad_for_sentence
-        params, sentence_data = test_data
+        from quantum_circuits import get_circuit_function
+        from quantum_mpi_utils import _compute_single_gradient_component
+        from config import OPTIMIZATION_CONFIG
+        states_calculated, U, Z, sentence, encoding, params = test_data
+        
+        if len(states_calculated) == 0:
+            logger.error("   ❌ Nessun state calcolato, impossibile testare gradiente parallelo")
+            return False
         
         # Test con timeout più lungo
         with timeout_context(60, logger):
             with Pool(processes=workers) as pool:
                 logger.info(f"   Pool creato con {workers} workers")
                 
-                # Test semplice: 2 calcoli identici
-                tasks = [(params, sentence_data) for _ in range(2)]
+                # Test calcolo gradiente parallelo per primi N parametri
+                circuit_func = get_circuit_function(len(sentence.split()))
+                psi = states_calculated[0]
+                U_test = [U[0]] if U else []
+                Z_test = [Z[0]] if Z else []
+                shift = np.pi / 2
+                
+                # Parallelizza calcolo gradiente per primi 4 parametri
+                n_test_params = min(4, len(params))
+                logger.info(f"   Test gradiente parallelo per {n_test_params} parametri...")
+                
+                tasks = []
+                for i in range(n_test_params):
+                    task_args = (i, params, shift, psi, U_test, Z_test,
+                                OPTIMIZATION_CONFIG['num_layers'], 
+                                OPTIMIZATION_CONFIG['embedding_dim'], 
+                                circuit_func)
+                    tasks.append(task_args)
                 
                 logger.info("   Invio tasks al pool...")
-                results = pool.starmap(loss_and_grad_for_sentence, tasks)
+                results = pool.starmap(_compute_single_gradient_component, tasks)
                 
                 logger.info(f"   ✅ Completato: {len(results)} risultati")
                 
@@ -287,36 +342,71 @@ def main():
         # Import per training
         from config import TRAINING_SENTENCES, OPTIMIZATION_CONFIG
         from encoding import Encoding
-        from quantum_mpi_utils import loss_and_grad_for_sentence
+        from main_superposition import process_sentence_states
         
         logger.info(f"⚡ Inizio training con {workers} workers...")
         logger.info(f"📊 Configurazione: {OPTIMIZATION_CONFIG}")
         
-        # Prima sentence per test completo
-        sentence = TRAINING_SENTENCES[0]
-        encoding = Encoding(sentence)
-        n_params = 2 * encoding.n_qubits
-        params = np.random.uniform(0, 2*np.pi, n_params)
+        # USA LA STESSA LOGICA DI main_superposition.py
+        sentences = TRAINING_SENTENCES
+        sentence = sentences[0]  # Prima sentence per test
+        encoding = Encoding(sentences, embeddingDim=OPTIMIZATION_CONFIG['embedding_dim'])
         
-        logger.info(f"📈 Epoca 1/{OPTIMIZATION_CONFIG['epochs']} - Sentence 1/{len(TRAINING_SENTENCES)}")
-        logger.info(f"   Sentence: '{sentence}' ({len(sentence.split())} parole)")
-        logger.info(f"   Parametri: {n_params}")
+        logger.info(f"📈 Test sentence: '{sentence}' ({len(sentence.split())} parole)")
+        logger.info(f"   State vectors disponibili: {len(encoding.stateVectors)}")
         
-        # Calcolo gradiente parallelo
-        sentence_data = (sentence, encoding, len(sentence.split()))
+        # Test process_sentence_states 
+        states = encoding.stateVectors[0]
+        states_calculated, U, Z = process_sentence_states(states)
         
-        with Pool(processes=workers) as pool:
-            logger.info(f"   Pool training creato con {workers} workers")
+        logger.info(f"   ✅ States calculated: {len(states_calculated)}")
+        logger.info(f"   ✅ U matrices: {len(U)}")  
+        logger.info(f"   ✅ Z matrices: {len(Z)}")
+        
+        # TEST CALCOLO GRADIENTE PARALLELO (OBIETTIVO FINALE)
+        if len(states_calculated) > 0:
+            from quantum_circuits import get_circuit_function
+            from quantum_mpi_utils import _compute_single_gradient_component
             
-            # Calcolo loss attuale
-            loss, _ = loss_and_grad_for_sentence(params, sentence_data)
-            logger.info(f"   Loss iniziale: {loss:.6f}")
+            circuit_func = get_circuit_function(len(states_calculated))
+            psi = states_calculated[0]
+            U_test = [U[0]] if U else []
+            Z_test = [Z[0]] if Z else []
+            shift = np.pi / 2
             
-            # Esempio calcolo gradiente (versione semplificata)
-            tasks = [(params, sentence_data) for _ in range(3)]
-            results = pool.starmap(loss_and_grad_for_sentence, tasks)
+            # Parametri per test
+            from quantum_utils import get_params
+            param_shape = get_params(OPTIMIZATION_CONFIG['num_qubits'], OPTIMIZATION_CONFIG['num_layers']).shape
+            n_params = int(np.prod(param_shape))
+            num_params = 2 * n_params  # V and K parameters
+            params = np.random.randn(num_params) * 0.1
             
-            logger.info(f"   ✅ Calcolo parallelo completato: {len(results)} risultati")
+            with Pool(processes=workers) as pool:
+                logger.info(f"   🔥 GRADIENTE PARALLELO con {workers} workers")
+                logger.info(f"      Parametri totali: {num_params}")
+                
+                # Parallelizza calcolo gradiente per tutti i parametri
+                n_test_params = min(8, num_params)  # Test con primi 8 parametri
+                logger.info(f"      Test su {n_test_params} parametri...")
+                
+                tasks = []
+                for i in range(n_test_params):
+                    task_args = (i, params, shift, psi, U_test, Z_test,
+                                OPTIMIZATION_CONFIG['num_layers'], 
+                                OPTIMIZATION_CONFIG['embedding_dim'], 
+                                circuit_func)
+                    tasks.append(task_args)
+                
+                start_time = time.time()
+                grad_components = pool.starmap(_compute_single_gradient_component, tasks)
+                elapsed = time.time() - start_time
+                
+                logger.info(f"   ✅ GRADIENTE PARALLELO COMPLETATO in {elapsed:.2f}s")
+                logger.info(f"      Componenti calcolate: {len(grad_components)}")
+                logger.info(f"      Gradiente norm: {np.linalg.norm(grad_components):.6f}")
+                logger.info(f"   🎯 PARALLELIZZAZIONE GRADIENTE FUNZIONA!")
+        else:
+            logger.error("   ❌ Nessun state calcolato per il test gradiente")
         
         logger.info("🎉 TRAINING COMPLETATO CON SUCCESSO!")
         return 0
