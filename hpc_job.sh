@@ -1,10 +1,17 @@
 #!/bin/bash
-#SBATCH --job-name=quantum_hpc
+#SBATCH --jobecho "🚀 CONFIGURAZIONE HPC BEAST MODE ULTIMATE (112 CORES - NODO COMPLETO!):"
+echo "  Job ID: $SLURM_JOB            mail -s "[💀 APOCALISSE HPC] Job $SLURM_JOB_ID - 32 NODI/3584 CORES/3552 WORKERS - Exit $EXIT_CODE" \
+         ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null || \il -s "[💀 APOCALISSE HPC] Job $SLURM_JOB_ID - 32 NODI/3584 CORES/3552 WORKERS - Exit $EXIT_CODE" \
+             ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null || \    mailx -s "[� APOCALISSE HPC] Job $SLURM_JOB_ID - 32 NODI/3584 CORES/3552 WORKERS - Exit $EXIT_CODE" \
+          ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null
+echo "  CPUs per task: $SLURM_CPUS_PER_TASK"
+echo "  Workers disponibili: $((SLURM_CPUS_PER_TASK - 1))"
+echo "  🔥 POTENZA MASSIMA: TUTTI I CORE DEL NODO LEONARDO!"e=quantum_hpc
 #SBATCH --output=quantum_training_%j.log
 #SBATCH --error=quantum_training_%j.log
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --nodes=32
+#SBATCH --ntasks=32
+#SBATCH --cpus-per-task=112
 #SBATCH --time=02:00:00
 #SBATCH --partition=boost_usr_prod
 #SBATCH --account=try25_rosati
@@ -24,10 +31,14 @@ source $WORK/venv_py311/bin/activate
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export SLURM_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
-echo "� CONFIGURAZIONE HPC BEAST MODE (32 CORES!):"
+echo "🔥🔥🔥 CONFIGURAZIONE HPC BEAST MODE APOCALITTICO - 32 NODI! 🔥🔥🔥"
 echo "  Job ID: $SLURM_JOB_ID"
+echo "  NODI: $SLURM_JOB_NUM_NODES"
+echo "  TASKS: $SLURM_NTASKS"
 echo "  CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "  Workers disponibili: $((SLURM_CPUS_PER_TASK - 1))"
+echo "  🚀 CORE TOTALI: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK))"
+echo "  ⚡ Workers disponibili: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK - SLURM_NTASKS))"
+echo "  💀 POTENZA DISTRUTTIVA: 3,584 CORES DI LEONARDO!"
 
 cd $WORK/variational_quantum_transformere_sovrapposition || {
     echo "❌ ERRORE: Directory progetto non trovata!"
@@ -37,7 +48,7 @@ cd $WORK/variational_quantum_transformere_sovrapposition || {
 mkdir -p logs checkpoints results
 
 # === Esecuzione Python ===
-echo "🚀 AVVIO TRAINING QUANTISTICO BEAST MODE - 100% PARALLELIZZAZIONE..."
+echo "�💀💀 AVVIO TRAINING QUANTISTICO APOCALITTICO - 3,552 WORKERS PARALLELI! 💀💀💀"
 python hpc_quantum_training_BEAST_MODE.py > logs/job_${SLURM_JOB_ID}.out 2>&1
 EXIT_CODE=$?
 
@@ -121,14 +132,14 @@ if command -v mailx >/dev/null 2>&1; then
     else
         echo "   ❌ Errore mailx, provo mail..."
         # Fallback a mail
-        mail -s "[🚀 BEAST MODE HPC] Job $SLURM_JOB_ID - 100% Parallelizzazione - Exit $EXIT_CODE" \
+        mail -s "[� BEAST MODE ULTIMATE] Job $SLURM_JOB_ID - 112 CORES/111 WORKERS - Exit $EXIT_CODE" \
              ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null || \
         echo "   ❌ Anche mail fallito"
     fi
 else
     # Prova mail diretto
     echo "   mailx non disponibile, provo mail..."
-    mail -s "[🚀 BEAST MODE HPC] Job $SLURM_JOB_ID - 100% Parallelizzazione - Exit $EXIT_CODE" \
+    mail -s "[� BEAST MODE ULTIMATE] Job $SLURM_JOB_ID - 112 CORES/111 WORKERS - Exit $EXIT_CODE" \
          ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null || \
     echo "   ❌ mail non funziona"
 fi
