@@ -212,23 +212,27 @@ def _compute_single_gradient_component(param_index, params, shift, psi, U, Z, nu
     worker_pid = os.getpid()
     start_time = time.time()
     
+    # Determine parameter shape
+    n_params_single = len(params) // 2
+    param_shape = get_params(2, num_layers).shape
+    
     # Shift parameter up
     params_plus = params.copy()
     params_plus[param_index] += shift
     
-    loss_plus = circuit_function(psi, U, Z,
-                                 params_plus[:len(params)//2].reshape(get_params(2, num_layers).shape),
-                                 params_plus[len(params)//2:].reshape(get_params(2, num_layers).shape),
-                                 num_layers, dim)
+    pV_plus = params_plus[:n_params_single].reshape(param_shape)
+    pK_plus = params_plus[n_params_single:].reshape(param_shape)
+    
+    loss_plus = circuit_function(psi, U, Z, pV_plus, pK_plus, num_layers, dim)
     
     # Shift parameter down
     params_minus = params.copy()
     params_minus[param_index] -= shift
     
-    loss_minus = circuit_function(psi, U, Z,
-                                  params_minus[:len(params)//2].reshape(get_params(2, num_layers).shape),
-                                  params_minus[len(params)//2:].reshape(get_params(2, num_layers).shape),
-                                  num_layers, dim)
+    pV_minus = params_minus[:n_params_single].reshape(param_shape)
+    pK_minus = params_minus[n_params_single:].reshape(param_shape)
+    
+    loss_minus = circuit_function(psi, U, Z, pV_minus, pK_minus, num_layers, dim)
     
     # Parameter-shift formula: ∂L/∂θᵢ = 0.5 * (L(θ+π/2) - L(θ-π/2))
     gradient_component = 0.5 * (loss_plus - loss_minus)

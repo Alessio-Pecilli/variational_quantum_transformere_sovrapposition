@@ -21,7 +21,13 @@ def create_smart_batches(num_params, num_workers):
 
 def compute_gradient_batch(batch_data):
     from quantum_mpi_utils import _compute_single_gradient_component
+    from quantum_circuits import get_circuit_function
     param_indices, params, shift, states_calc, U, Z, num_layers, dim, circuit_func = batch_data
+    
+    # Se circuit_func è None, ottienilo automaticamente
+    if circuit_func is None:
+        circuit_func = get_circuit_function(len(states_calc))
+    
     grads = []
     for idx in param_indices:
         grad = _compute_single_gradient_component(idx, params, shift, states_calc, U, Z, num_layers, dim, circuit_func)

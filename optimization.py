@@ -450,8 +450,8 @@ def optimize_parameters_parallel(params, shift, states_calculated, U, Z, num_lay
                                  embedding_dim, circuit_func, num_workers=None,
                                  opt_maxiter=150, opt_maxfev=50):
     """
-    Esegue ottimizzazione parallela dei parametri variationali.
-    Ogni worker calcola un batch di gradienti.
+    Esegue ottimizzazione parallela dei parametri variationali con ottimizzatore Adam.
+    Ogni worker calcola un batch di gradienti, poi Adam aggiorna i parametri.
     """
     import logging
     from multiprocessing import Pool
@@ -461,31 +461,109 @@ def optimize_parameters_parallel(params, shift, states_calculated, U, Z, num_lay
     if num_workers is None:
         num_workers = get_hpc_workers_max()
 
-    logger.info(f"🚀 Parallelizzazione attiva: {num_workers} worker")
-    logger.info(f"🧠 Parametri totali: {num_params}")
+    logger.info(f"🚀 BEAST MODE OPTIMIZATION START")
+    logger.info(f"   Workers: {num_workers}")
+    logger.info(f"   Parametri: {num_params}")
+    logger.info(f"   Max iter: {opt_maxiter}")
 
-    # Crea i batch di lavoro
+    # Setup Adam optimizer
+    learning_rate = 0.01
+    beta1, beta2 = 0.9, 0.999
+    epsilon = 1e-8
+    
+    # Adam state variables
+    m = np.zeros(num_params)  # First moment
+    v = np.zeros(num_params)  # Second moment
+    
+    # Current parameters
+    current_params = params.copy()
+    best_params = current_params.copy()
+    best_loss = float('inf')
+    
+    logger.info(f"🧠 Adam optimizer: lr={learning_rate}, β1={beta1}, β2={beta2}")
+
+    # Crea i batch di lavoro una volta
     batch_list = create_smart_batches(num_params, num_workers)
     logger.info(f"🧩 Suddivisione in {len(batch_list)} batch")
 
-    results = []
-    start_time = time.time()
+    # Training loop
+    for iteration in range(opt_maxiter):
+        iter_start = time.time()
+        
+        # Calcola loss corrente usando la circuit_function
+        from quantum_circuits import get_circuit_function
+        if circuit_func is None:
+            circuit_func = get_circuit_function(len(states_calculated))
+        
+        # Parametri in forma matriciale
+        n_params_single = num_params // 2
+        param_shape = (num_layers, 2)  # Assumi 2 qubit per layer
+        
+        pV = current_params[:n_params_single].reshape(param_shape)
+        pK = current_params[n_params_single:].reshape(param_shape)
+        
+        current_loss = circuit_func(states_calculated, U, Z, pV, pK, num_layers, embedding_dim)
+        
+        # 🔥 Esecuzione parallela dei gradienti
+        start_time = time.time()
+        with Pool(num_workers) as pool:
+            batch_tasks = [
+                (batch, current_params, shift, states_calculated, U, Z, num_layers, embedding_dim, circuit_func)
+                for batch in batch_list
+            ]
+            results = pool.map(compute_gradient_batch, batch_tasks)
 
-    # 🔥 Esecuzione parallela vera (usa la funzione globale)
-    with Pool(num_workers) as pool:
-        batch_tasks = [
-            (batch, params, shift, states_calculated, U, Z, num_layers, embedding_dim, circuit_func)
-            for batch in batch_list
-        ]
-        results = pool.map(compute_gradient_batch, batch_tasks)
+        # Ricompone i gradienti
+        gradients = np.zeros(num_params)
+        for param_indices, grads in results:
+            for i, grad in zip(param_indices, grads):
+                gradients[i] = grad
 
-    # Ricompone i gradienti
-    gradients = np.zeros(num_params)
-    for param_indices, grads in results:
-        for i, grad in zip(param_indices, grads):
-            gradients[i] = grad
+        grad_time = time.time() - start_time
+        
+        # Adam update
+        t = iteration + 1  # Adam timestep (1-indexed)
+        
+        # Update biased first moment estimate
+        m = beta1 * m + (1 - beta1) * gradients
+        
+        # Update biased second moment estimate
+        v = beta2 * v + (1 - beta2) * (gradients ** 2)
+        
+        # Compute bias-corrected first moment estimate
+        m_hat = m / (1 - beta1 ** t)
+        
+        # Compute bias-corrected second moment estimate
+        v_hat = v / (1 - beta2 ** t)
+        
+        # Update parameters
+        current_params = current_params - learning_rate * m_hat / (np.sqrt(v_hat) + epsilon)
+        
+        # Wrap angles to [-π, π]
+        current_params = np.mod(current_params + np.pi, 2 * np.pi) - np.pi
+        
+        # Update best parameters if loss improved
+        if current_loss < best_loss:
+            best_loss = current_loss
+            best_params = current_params.copy()
+            
+        iter_time = time.time() - iter_start
+        
+        # Logging ogni 10 iterazioni o alla fine
+        if iteration % 10 == 0 or iteration == opt_maxiter - 1:
+            grad_norm = np.linalg.norm(gradients)
+            param_norm = np.linalg.norm(current_params)
+            logger.info(f"   Iter {iteration:3d}: loss={current_loss:.6f} (best={best_loss:.6f}) "
+                       f"grad_norm={grad_norm:.4f} param_norm={param_norm:.4f} "
+                       f"time={iter_time:.2f}s (grad={grad_time:.2f}s)")
+            
+            # Early stopping
+            if grad_norm < 1e-6:
+                logger.info(f"🎯 Convergenza raggiunta alla iterazione {iteration}")
+                break
 
-    elapsed = time.time() - start_time
-    logger.info(f"✅ Gradienti calcolati in {elapsed:.2f}s con {num_workers} worker")
+    logger.info(f"✅ BEAST MODE OPTIMIZATION COMPLETE")
+    logger.info(f"   Best loss: {best_loss:.6f}")
+    logger.info(f"   Final param norm: {np.linalg.norm(best_params):.4f}")
 
-    return gradients
+    return best_params
