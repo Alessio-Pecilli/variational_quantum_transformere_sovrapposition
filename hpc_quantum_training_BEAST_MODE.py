@@ -15,9 +15,9 @@ from contextlib import contextmanager
 import numpy as np
 from multiprocessing import Pool, cpu_count, Manager
 from functools import partial
-import psutil
 import pickle
 from datetime import datetime
+# psutil rimosso per compatibilità HPC
 
 def setup_logging():
     """Setup logging con timestamp e dettagli"""
@@ -72,14 +72,15 @@ def log_system_info_beast(logger):
     logger.info(f"   💪 CPU Totali: {total_cpus} (fonte: {source})")
     logger.info(f"   🚀 Workers BEAST MODE: {max_workers} (MASSIMA POTENZA!)")
     
-    # Memoria
+    # Memoria (compatibile HPC senza psutil)
     try:
+        import psutil
         memory = psutil.virtual_memory()
         logger.info(f"   🧠 Memoria: {memory.total / (1024**3):.1f} GB totale")
         logger.info(f"      Disponibile: {memory.available / (1024**3):.1f} GB")
         logger.info(f"      Utilizzo: {memory.percent:.1f}%")
-    except:
-        logger.info("   🧠 Memoria: Info non disponibile")
+    except ImportError:
+        logger.info("   🧠 Memoria: Info non disponibile (psutil non installato - OK per HPC)")
     
     # Variabili ambiente HPC
     env_vars = ['SLURM_JOB_ID', 'SLURM_NTASKS', 'SLURM_CPUS_PER_TASK', 'OMP_NUM_THREADS']
