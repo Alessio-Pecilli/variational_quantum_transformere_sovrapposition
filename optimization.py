@@ -467,8 +467,9 @@ def optimize_parameters_parallel(params, shift, states_calculated, U, Z, num_lay
     logger.info(f"   Parametri: {num_params}")
     logger.info(f"   Max iter: {opt_maxiter}")
 
-    # Setup Adam optimizer
-    learning_rate = 0.01
+    # Setup Adam optimizer - usa learning rate da config
+    from config import OPTIMIZATION_CONFIG
+    learning_rate = OPTIMIZATION_CONFIG.get('learning_rate', 0.001)  # Default sicuro
     beta1, beta2 = 0.9, 0.999
     epsilon = 1e-8
     
@@ -521,6 +522,13 @@ def optimize_parameters_parallel(params, shift, states_calculated, U, Z, num_lay
                 gradients[i] = grad
 
         grad_time = time.time() - start_time
+        
+        # Gradient clipping per stabilità
+        grad_norm = np.linalg.norm(gradients)
+        max_grad_norm = 1.0  # Clip gradienti troppo grandi
+        if grad_norm > max_grad_norm:
+            gradients = gradients * (max_grad_norm / grad_norm)
+            logger.info(f"   🔧 Gradient clipped: {grad_norm:.6f} -> {max_grad_norm}")
         
         # Adam update
         t = iteration + 1  # Adam timestep (1-indexed)

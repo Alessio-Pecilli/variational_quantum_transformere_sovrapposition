@@ -13,7 +13,7 @@ OPTIMIZATION_CONFIG = {
     'opt_maxiter': 300,        # più iterazioni interne per stabilità
     'opt_maxfev': 400,         # più valutazioni loss
     'epochs': 10,
-    'learning_rate': 0.01,
+    'learning_rate':  0.001 ,  # RIDOTTO: da 0.15 a 0.001 per stabilità
     'save_frequency': 50,
     'log_frequency': 60,
     'early_stop_threshold': 0.05,
