@@ -1,7 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=quantum_ap# === Esecuzione Python ===
-echo "🔥🔥🔥 AVVIO TRAINING QUANTISTICO DEVASTANTE - 248 WORKERS PARALLELI! 🔥🔥🔥"
-python hpc_quantum_training_BEAST_MODE.py > logs/job_${SLURM_JOB_ID}.out 2>&1lisse
+#SBATCH --job-name=quantum_apocalisse
 #SBATCH --output=quantum_apocalisse_%j.log
 #SBATCH --error=quantum_apocalisse_%j.log
 #SBATCH --nodes=8
@@ -22,7 +20,6 @@ module load openmpi/4.1.6--gcc--12.2.0
 
 # === Ambiente virtuale ===
 source $WORK/venv_py311/bin/activate
-
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 echo "🔥🔥🔥 CONFIGURAZIONE HPC BEAST MODE - 8 NODI DEVASTANTI! 🔥🔥🔥"
@@ -32,7 +29,7 @@ echo "  TASKS: $SLURM_NTASKS"
 echo "  CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "  🚀 CORE TOTALI: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK))"
 echo "  ⚡ Workers disponibili: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK - SLURM_NTASKS))"
-echo "  💀 POTENZA DEVASTANTE: 256 CORES REALI DI LEONARDO!"
+echo "  💀 POTENZA DEVASTANTE: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK)) CORES REALI DI LEONARDO!"
 
 cd $WORK/variational_quantum_transformere_sovrapposition || {
     echo "❌ ERRORE: Directory progetto non trovata!"
@@ -42,7 +39,7 @@ cd $WORK/variational_quantum_transformere_sovrapposition || {
 mkdir -p logs checkpoints results
 
 # === Esecuzione Python ===
-echo "��� AVVIO TRAINING QUANTISTICO DEVASTANTE - 444 WORKERS PARALLELI! ���"
+echo "🔥 AVVIO TRAINING QUANTISTICO DEVASTANTE - BEAST MODE HPC 🔥"
 python hpc_quantum_training_BEAST_MODE.py > logs/job_${SLURM_JOB_ID}.out 2>&1
 EXIT_CODE=$?
 
@@ -53,7 +50,7 @@ if [ -f "hpc_beast_mode.log" ]; then
 fi
 
 # === Copia risultati training se esistono ===
-if [ -f "beast_mode_results_"*.pkl ]; then
+if ls beast_mode_results_*.pkl >/dev/null 2>&1; then
     cp beast_mode_results_*.pkl logs/
     echo "💾 Risultati training salvati in logs/"
 fi
@@ -68,34 +65,24 @@ echo "Duration: $SECONDS sec"
 # === Prepara report COMPLETO per email ===
 REPORT="logs/report_${SLURM_JOB_ID}.txt"
 {
-    echo "=== 📧 APOCALISSE CINECA - RISULTATI DEVASTANTI 📧 ==="
+    echo "=== [APOCALISSE HPC REPORT] ==="
     echo "Job ID: $SLURM_JOB_ID"
     echo "Host: $(hostname)"
-    echo "Nodi utilizzati: 32"
-    echo "Cores totali: 3,584"
-    echo "Workers paralleli: 3,552"
+    echo "Nodi utilizzati: $SLURM_JOB_NUM_NODES"
+    echo "Cores totali: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK))"
     echo "Data inizio: $(date)"
     echo "Exit code: $EXIT_CODE"
     echo "Durata: $SECONDS secondi"
     echo ""
-    echo "=== 📋 LOG PRINCIPALE COMPLETO ==="
-    echo ""
+    echo "=== LOG PRINCIPALE ==="
     cat logs/job_${SLURM_JOB_ID}.out 2>/dev/null || echo "Log non trovato"
     echo ""
-    
-    # Aggiungi log beast mode se presente
     if [ -f "logs/beast_mode_${SLURM_JOB_ID}.log" ]; then
-        echo "=== 🔥 LOG BEAST MODE APOCALITTICO ==="
-        echo ""
+        echo "=== LOG BEAST MODE ==="
         cat logs/beast_mode_${SLURM_JOB_ID}.log
-        echo ""
-    else
-        echo "⚠️  File BEAST MODE log non trovato"
-        echo ""
     fi
-    
-    # Aggiungi info ambiente
-    echo "=== 🖥️ INFORMAZIONI AMBIENTE APOCALITTICO ==="
+    echo ""
+    echo "=== AMBIENTE ==="
     echo "SLURM_JOB_ID: $SLURM_JOB_ID"
     echo "SLURM_JOB_NUM_NODES: $SLURM_JOB_NUM_NODES"
     echo "SLURM_NTASKS: $SLURM_NTASKS"
@@ -104,46 +91,26 @@ REPORT="logs/report_${SLURM_JOB_ID}.txt"
     echo "Working directory: $(pwd)"
     echo "Python version: $(python --version 2>&1)"
     echo ""
-    
-    echo "=== 📁 FILE GENERATI ==="
+    echo "=== FILES ==="
     ls -la logs/ 2>/dev/null || echo "Directory logs non trovata"
-    echo ""
-    
-    echo "=== 🏁 FINE REPORT APOCALITTICO ==="
 } > "$REPORT"
 
-# === Invio email GARANTITO ===
-echo "📧 Preparazione invio email apocalittica..."
-
-# Prova mailx (metodo principale)
+# === Invio email ===
+echo "📧 Invio report via email..."
 if command -v mailx >/dev/null 2>&1; then
-    echo "   Usando mailx..."
-    mailx -s "[💀 APOCALISSE HPC] Job $SLURM_JOB_ID - 32 NODI/3584 CORES/3552 WORKERS - Exit $EXIT_CODE" \
+    mailx -s "[APOCALISSE HPC] Job $SLURM_JOB_ID - Exit $EXIT_CODE" \
           ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo "   ✅ Email apocalittica inviata con mailx"
-    else
-        echo "   ❌ Errore mailx, provo mail..."
-        # Fallback a mail
-        mail -s "[💀 APOCALISSE HPC] Job $SLURM_JOB_ID - 32 NODI/3584 CORES/3552 WORKERS - Exit $EXIT_CODE" \
-             ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null || \
-        echo "   ❌ Anche mail fallito"
-    fi
+elif command -v mail >/dev/null 2>&1; then
+    mail -s "[APOCALISSE HPC] Job $SLURM_JOB_ID - Exit $EXIT_CODE" \
+         ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null
 else
-    # Prova mail diretto
-    echo "   mailx non disponibile, provo mail..."
-    mail -s "[💀 APOCALISSE HPC] Job $SLURM_JOB_ID - 32 NODI/3584 CORES/3552 WORKERS - Exit $EXIT_CODE" \
-         ale.pecilli@stud.uniroma3.it < "$REPORT" 2>/dev/null || \
-    echo "   ❌ mail non funziona"
+    echo "⚠️ mailx/mail non disponibili: report salvato localmente in $REPORT"
 fi
 
-# Log finale
 echo ""
-echo "📋 Report apocalittico salvato in: $REPORT"
-echo "📏 Dimensione report: $(wc -l < "$REPORT" 2>/dev/null || echo "N/A") righe"
-echo "📧 Se non ricevi email, controlla il file: $REPORT"
-
+echo "📋 Report salvato in: $REPORT"
+echo "📏 Dimensione report: $(wc -l < "$REPORT" 2>/dev/null || echo 'N/A') righe"
 echo ""
-echo "💀💀💀 APOCALISSE COMPLETATA! LEONARDO HA BRUCIATO! 💀💀💀"
+echo "💀 APOCALISSE COMPLETATA! LEONARDO HA BRUCIATO! 💀"
 
 exit $EXIT_CODE

@@ -17,7 +17,6 @@ from optimization import optimize_parameters
 from visualization import load_parameters, save_parameters
 from config import OPTIMIZATION_CONFIG, TRAINING_SENTENCES, DEFAULT_SENTENCES
 from quantum_circuits import get_circuit_function
-from optimization import optimize_parameters
 from visualization import load_parameters, save_parameters
 from config import OPTIMIZATION_CONFIG, TRAINING_SENTENCES, DEFAULT_SENTENCES
 

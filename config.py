@@ -4,17 +4,19 @@ Configuration settings for quantum optimization experiments.
 
 # Optimization settings
 OPTIMIZATION_CONFIG = {
-    'num_iterations': 5,
+    'num_iterations': 150,     # almeno 100–200 per un training serio
     'num_layers': 3,
-    'max_hours': 100,
+    'max_hours': 4,            # tempo limite in ore
     'embedding_dim': 4,
     'n_qubits': 2,
-    'num_qubits': 2,  # Alias for consistency
+    'num_qubits': 2,
+    'opt_maxiter': 300,        # più iterazioni interne per stabilità
+    'opt_maxfev': 400,         # più valutazioni loss
     'epochs': 10,
     'learning_rate': 0.01,
-    'save_frequency': 50,  # Save parameters every N evaluations
-    'log_frequency': 60,   # Log progress every N seconds
-    'early_stop_threshold': 0.1,
+    'save_frequency': 50,
+    'log_frequency': 60,
+    'early_stop_threshold': 0.05,
     'numerical_epsilon': 1e-12
 }
 
