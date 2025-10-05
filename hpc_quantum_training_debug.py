@@ -139,22 +139,26 @@ def get_hpc_workers():
     
     return workers
 
-def get_safe_worker_count(logger):
-    """Determina numero workers sicuro per HPC"""
+def get_max_worker_count(logger):
+    """USA TUTTA LA POTENZA HPC DISPONIBILE - NESSUN LIMITE!"""
     try:
         detected_workers = get_hpc_workers()
         logger.info(f"📊 Workers rilevati automaticamente: {detected_workers}")
         
-        # Limiti di sicurezza per HPC
-        max_safe_workers = min(detected_workers, 16)  # Limite cautelativo
+        # 🚀 BEAST MODE: USA TUTTO - NO LIMITS!
+        # Lascia solo 1-2 core per sistema operativo se >4 core
+        if detected_workers > 4:
+            max_workers = detected_workers - 1  # Lascia 1 core per OS
+        else:
+            max_workers = detected_workers  # Usa tutto se pochi core
         
-        logger.info(f"📊 Workers scelti per sicurezza: {max_safe_workers}")
-        return max_safe_workers
+        logger.info(f"� BEAST MODE: Usando {max_workers}/{detected_workers} workers (100% potenza!)")
+        return max_workers
         
     except Exception as e:
         logger.error(f"❌ Errore rilevamento workers: {e}")
-        logger.info("🔄 Fallback a 4 workers")
-        return 4
+        logger.info("🔄 Fallback a 6 workers (invece di 4)")
+        return 6  # Anche il fallback più aggressivo
 
 def test_single_calculation(logger):
     """Test calcolo singolo prima del multiprocessing"""
@@ -313,7 +317,7 @@ def main():
         logger.info("STEP 2: CONFIGURAZIONE WORKERS")
         logger.info("="*40)
         
-        workers = get_safe_worker_count(logger)
+        workers = get_max_worker_count(logger)
         
         # Step 3: Test singolo
         logger.info("\n" + "="*40)

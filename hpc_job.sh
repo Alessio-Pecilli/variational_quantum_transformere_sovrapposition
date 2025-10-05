@@ -37,7 +37,7 @@ mkdir -p logs checkpoints results
 
 # === Esecuzione Python ===
 echo "🚀 AVVIO TRAINING QUANTISTICO CON DEBUG ESTESO..."
-python hpc_quantum_training_debug.py > logs/job_${SLURM_JOB_ID}.out 2>&1
+python hpc_quantum_training_BEAST_MODE.py logs/job_${SLURM_JOB_ID}.out 2>&1
 EXIT_CODE=$?
 
 # === Copia log debug ===
