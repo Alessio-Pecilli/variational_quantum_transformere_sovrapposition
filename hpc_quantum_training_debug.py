@@ -441,12 +441,15 @@ def main():
                     
                     logger.info(f"🚀 TRAINING: {max_epochs} epochs, LR={learning_rate}")
                     
-                    # Training loop su tutto il dataset
+                    # Training loop su tutto il dataset - CORRETTO!
                     for epoch in range(max_epochs):
                         epoch_start = time.time()
+                        total_gradient = np.zeros(num_params)  # Gradiente completo
                         epoch_loss = 0.0
                         
-                        # Cicla su tutte le frasi 
+                        logger.info(f"   Epoca {epoch}: Calcolo gradiente completo su {num_params} parametri...")
+                        
+                        # GRADIENT ACCUMULATION: Somma gradienti da tutte le frasi
                         for batch_idx, (states_calc, U_batch, Z_batch, sent) in enumerate(all_training_data):
                             # Calcola loss per questa frase
                             loss_batch = circuit_func(
@@ -458,20 +461,25 @@ def main():
                             )
                             epoch_loss += loss_batch
                             
-                            # Calcola gradiente per questa frase (primi 8 parametri per velocità)
-                            n_grad = min(8, num_params)
+                            # Calcola TUTTO il gradiente per questa frase
                             grad_tasks = []
-                            for j in range(n_grad):
+                            for j in range(num_params):  # TUTTI i parametri
                                 grad_tasks.append((j, params, shift, states_calc, U_batch, Z_batch,
                                                  OPTIMIZATION_CONFIG['num_layers'], 
                                                  OPTIMIZATION_CONFIG['embedding_dim'], 
                                                  circuit_func))
                             
-                            # Calcola gradiente in parallelo
+                            # Calcola gradiente completo in parallelo
                             grad_batch = np.array(pool.starmap(_compute_single_gradient_component, grad_tasks))
                             
-                            # Aggiorna parametri (solo primi n_grad)
-                            params[:n_grad] -= learning_rate * grad_batch
+                            # ACCUMULA gradiente (non aggiorna subito)
+                            total_gradient += grad_batch
+                            
+                            logger.info(f"      Frase {batch_idx+1}/{len(all_training_data)}: Loss={loss_batch:.4f}")
+                        
+                        # AGGIORNAMENTO PARAMETRI: Una volta per epoca con gradiente medio
+                        avg_gradient = total_gradient / len(all_training_data)
+                        params -= learning_rate * avg_gradient  # Aggiorna TUTTI i parametri
                         
                         # Media loss su tutto dataset
                         avg_loss = epoch_loss / len(all_training_data)
@@ -491,12 +499,23 @@ def main():
                             break
                     
                     # Salva risultati finali
-                    final_improvement = (best_loss / (epoch_loss / len(all_training_data))) * 100
+                    final_improvement = ((current_loss - best_loss) / current_loss) * 100  # % riduzione loss
                     logger.info(f"🎉 TRAINING COMPLETATO!")
                     logger.info(f"   Loss iniziale: {current_loss:.6f}")  
                     logger.info(f"   Loss finale: {avg_loss:.6f}")
                     logger.info(f"   Miglior loss: {best_loss:.6f}")
-                    logger.info(f"   Miglioramento: {final_improvement:.1f}%")
+                    logger.info(f"   Riduzione loss: {final_improvement:.1f}%")
+                    
+                    # Analisi performance
+                    if best_loss < 0.1:
+                        logger.info(f"   ✅ OTTIMO: Loss < 0.1 raggiunta!")
+                    elif best_loss < 0.3:
+                        logger.info(f"   👍 BUONO: Loss decente, ma può migliorare")
+                    else:
+                        logger.info(f"   ⚠️  ATTENZIONE: Loss ancora alta, serve più training")
+                        
+                    logger.info(f"   📊 Frasi processate: {len(all_training_data)}")
+                    logger.info(f"   ⚡ Stati totali: {sum(len(data[0]) for data in all_training_data)}")
                     
                     # Salva parametri ottimali
                     import pickle
