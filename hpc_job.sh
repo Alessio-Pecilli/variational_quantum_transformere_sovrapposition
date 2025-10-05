@@ -1,10 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=quantum_apocalisse
+#SBATCH --job-name=quantum_ap# === Esecuzione Python ===
+echo "🔥🔥🔥 AVVIO TRAINING QUANTISTICO DEVASTANTE - 248 WORKERS PARALLELI! 🔥🔥🔥"
+python hpc_quantum_training_BEAST_MODE.py > logs/job_${SLURM_JOB_ID}.out 2>&1lisse
 #SBATCH --output=quantum_apocalisse_%j.log
 #SBATCH --error=quantum_apocalisse_%j.log
-#SBATCH --nodes=32
-#SBATCH --ntasks=32
-#SBATCH --cpus-per-task=112
+#SBATCH --nodes=8
+#SBATCH --ntasks=8
+#SBATCH --cpus-per-task=32
 #SBATCH --time=02:00:00
 #SBATCH --partition=boost_usr_prod
 #SBATCH --account=try25_rosati
@@ -23,14 +25,14 @@ source $WORK/venv_py311/bin/activate
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
-echo "🔥🔥🔥 CONFIGURAZIONE HPC BEAST MODE APOCALITTICO - 32 NODI! 🔥🔥🔥"
+echo "🔥🔥🔥 CONFIGURAZIONE HPC BEAST MODE - 8 NODI DEVASTANTI! 🔥🔥🔥"
 echo "  Job ID: $SLURM_JOB_ID"
 echo "  NODI: $SLURM_JOB_NUM_NODES"
 echo "  TASKS: $SLURM_NTASKS"
 echo "  CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "  🚀 CORE TOTALI: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK))"
 echo "  ⚡ Workers disponibili: $((SLURM_NTASKS * SLURM_CPUS_PER_TASK - SLURM_NTASKS))"
-echo "  💀 POTENZA DISTRUTTIVA: 3,584 CORES DI LEONARDO!"
+echo "  💀 POTENZA DEVASTANTE: 256 CORES REALI DI LEONARDO!"
 
 cd $WORK/variational_quantum_transformere_sovrapposition || {
     echo "❌ ERRORE: Directory progetto non trovata!"
@@ -40,7 +42,7 @@ cd $WORK/variational_quantum_transformere_sovrapposition || {
 mkdir -p logs checkpoints results
 
 # === Esecuzione Python ===
-echo "💀💀💀 AVVIO TRAINING QUANTISTICO APOCALITTICO - 3,552 WORKERS PARALLELI! 💀💀💀"
+echo "��� AVVIO TRAINING QUANTISTICO DEVASTANTE - 444 WORKERS PARALLELI! ���"
 python hpc_quantum_training_BEAST_MODE.py > logs/job_${SLURM_JOB_ID}.out 2>&1
 EXIT_CODE=$?
 
