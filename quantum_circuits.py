@@ -1,15 +1,31 @@
 """
 Quantum circuit creation functions for different word configurations.
+Updated with Generalized Architecture Support.
 """
 import numpy as np
 import datetime
 from qiskit import QuantumCircuit
 from qiskit.circuit.library import UnitaryGate
 from qiskit.quantum_info import Statevector
+from typing import List, Optional, Dict
 
 from layer import AnsatzBuilder
 from quantum_utils import build_controlled_unitary, calculate_loss_from_statevector
 import visualization
+
+# Import new generalized architecture
+try:
+    from generalized_quantum_circuits import (
+        AdaptiveQuantumCircuitFactory, 
+        create_quantum_circuit_for_sentence,
+        GeneralizedQuantumCircuitBuilder
+    )
+    GENERALIZED_AVAILABLE = True
+    print("✅ Generalized Quantum Circuits available")
+except ImportError as e:
+    GENERALIZED_AVAILABLE = False
+    print(f"⚠️ Generalized Quantum Circuits not available: {e}")
+    print("   Falling back to original implementation")
 
 
 def create_circuit_2words(psi, U, Z, params_v, params_k, num_layers, dim=4):
@@ -404,7 +420,7 @@ def create_experimental_circuit(psi, U, Z, params_v, params_k, params_f, num_lay
     return loss
 
 
-# Circuit function mapping
+# Circuit function mapping (Legacy)
 CIRCUIT_FUNCTIONS = {
     2: create_circuit_2words,
     4: create_circuit_4words,
@@ -430,3 +446,230 @@ def get_circuit_function(num_words):
         return CIRCUIT_FUNCTIONS[num_words]
     else:
         raise ValueError(f"Number of words ({num_words}) not supported. Maximum 16 words.")
+
+
+def create_adaptive_quantum_circuit(sentence_words: List[str], vocab_info: Dict,
+                                  embedding_dim: int, params_v: np.ndarray, 
+                                  params_k: np.ndarray, num_layers: int,
+                                  use_generalized: bool = True,
+                                  **kwargs) -> float:
+    """
+    Crea circuito quantico adattivo che sceglie automaticamente tra implementazioni.
+    
+    Args:
+        sentence_words: Lista parole della frase
+        vocab_info: Informazioni vocabolario
+        embedding_dim: Dimensione embedding (4, 16, 64, 256, etc.)
+        params_v: Parametri ansatz V
+        params_k: Parametri ansatz K 
+        num_layers: Numero layer ansatz
+        use_generalized: Se usare architettura generalizzata (default: True)
+        **kwargs: Argomenti aggiuntivi
+        
+    Returns:
+        Loss calcolata dal circuito
+    """
+    
+    sentence_length = len(sentence_words)
+    
+    # Usa architettura generalizzata se disponibile e richiesta
+    if GENERALIZED_AVAILABLE and use_generalized:
+        try:
+            print(f"🚀 Using Generalized Architecture: {embedding_dim}D embedding, {sentence_length} words")
+            
+            return create_quantum_circuit_for_sentence(
+                sentence_words=sentence_words,
+                vocab_info=vocab_info,
+                embedding_dim=embedding_dim,
+                params_v=params_v,
+                params_k=params_k,
+                num_layers=num_layers,
+                **kwargs
+            )
+            
+        except Exception as e:
+            print(f"⚠️ Generalized architecture failed: {e}")
+            print("🔄 Falling back to legacy implementation")
+    
+    # Fallback a implementazione legacy
+    return _create_legacy_circuit(sentence_words, vocab_info, embedding_dim, 
+                                 params_v, params_k, num_layers, **kwargs)
+
+
+def _create_legacy_circuit(sentence_words: List[str], vocab_info: Dict,
+                          embedding_dim: int, params_v: np.ndarray, 
+                          params_k: np.ndarray, num_layers: int,
+                          **kwargs) -> float:
+    """
+    Implementazione legacy per compatibilità con codice esistente.
+    Supporta solo embedding_dim=4 e sentence_length limitati.
+    """
+    
+    sentence_length = len(sentence_words)
+    
+    # Verifica compatibilità legacy
+    if embedding_dim != 4:
+        raise ValueError(f"Legacy implementation supports only embedding_dim=4, got {embedding_dim}")
+    
+    if sentence_length not in CIRCUIT_FUNCTIONS:
+        raise ValueError(f"Legacy implementation supports only {list(CIRCUIT_FUNCTIONS.keys())} words, got {sentence_length}")
+    
+    print(f"⚙️ Using Legacy Architecture: {embedding_dim}D embedding, {sentence_length} words")
+    
+    # Genera unitarie default per legacy
+    psi = _generate_legacy_unitaries(sentence_length)
+    U = _generate_legacy_unitaries(sentence_length)
+    Z = _generate_legacy_unitaries(sentence_length)
+    
+    # Chiama funzione legacy appropriata
+    circuit_function = CIRCUIT_FUNCTIONS[sentence_length]
+    
+    return circuit_function(
+        psi=psi, U=U, Z=Z,
+        params_v=params_v,
+        params_k=params_k,
+        num_layers=num_layers,
+        dim=embedding_dim
+    )
+
+
+def _generate_legacy_unitaries(sentence_length: int) -> List[np.ndarray]:
+    """Genera unitarie 4x4 per implementazione legacy."""
+    
+    unitaries = []
+    
+    for i in range(sentence_length):
+        # Genera unitaria 4x4 random
+        angles = np.random.random(4) * 2 * np.pi
+        
+        # Costruisci unitaria 2x2
+        u2x2 = np.array([
+            [np.cos(angles[0]) * np.exp(1j * angles[2]), 
+             np.sin(angles[0]) * np.exp(1j * (angles[1] + angles[2]))],
+            [-np.sin(angles[0]) * np.exp(1j * (angles[1] - angles[2])), 
+             np.cos(angles[0]) * np.exp(-1j * angles[2])]
+        ])
+        
+        # Estendi a 4x4 con prodotto tensoriale
+        I = np.eye(2)
+        if i % 2 == 0:
+            unitary_4x4 = np.kron(u2x2, I)
+        else:
+            unitary_4x4 = np.kron(I, u2x2)
+        
+        unitaries.append(unitary_4x4)
+    
+    return unitaries
+
+
+def get_optimal_circuit_config(vocab_size: int, max_sentence_length: int) -> Dict:
+    """
+    Suggerisce configurazione ottimale per vocabolario e lunghezza frase.
+    
+    Args:
+        vocab_size: Dimensione vocabolario
+        max_sentence_length: Lunghezza massima frasi
+        
+    Returns:
+        Dict con configurazione suggerita
+    """
+    
+    if not GENERALIZED_AVAILABLE:
+        return {
+            "embedding_dim": 4,
+            "max_supported_length": 16,
+            "architecture": "legacy",
+            "recommendation": "Install generalized architecture for better scaling"
+        }
+    
+    # Usa factory per suggerimenti
+    optimal_embedding = AdaptiveQuantumCircuitFactory.get_optimal_embedding_dim(vocab_size)
+    complexity = AdaptiveQuantumCircuitFactory.estimate_circuit_complexity(optimal_embedding, max_sentence_length)
+    
+    config = {
+        "vocab_size": vocab_size,
+        "max_sentence_length": max_sentence_length,
+        "suggested_embedding_dim": optimal_embedding,
+        "architecture": "generalized" if complexity["is_feasible"] else "legacy",
+        "complexity": complexity,
+        "is_feasible": complexity["is_feasible"]
+    }
+    
+    if not complexity["is_feasible"]:
+        # Suggerisci configurazione più piccola
+        for test_embedding in [64, 16, 4]:
+            test_complexity = AdaptiveQuantumCircuitFactory.estimate_circuit_complexity(test_embedding, max_sentence_length)
+            if test_complexity["is_feasible"]:
+                config["suggested_embedding_dim"] = test_embedding
+                config["complexity"] = test_complexity
+                config["is_feasible"] = True
+                config["note"] = f"Reduced from {optimal_embedding} for feasibility"
+                break
+    
+    return config
+
+
+def test_circuit_architecture():
+    """Test delle diverse architetture disponibili."""
+    
+    print("🧪 TESTING QUANTUM CIRCUIT ARCHITECTURES")
+    print("="*50)
+    
+    # Test configurations
+    test_cases = [
+        # (sentence_length, embedding_dim, expected_architecture)
+        (3, 4, "legacy"),
+        (5, 16, "generalized"),
+        (9, 64, "generalized"), 
+        (17, 256, "generalized")
+    ]
+    
+    for sentence_length, embedding_dim, expected_arch in test_cases:
+        print(f"\n🔬 Test: {sentence_length} words, {embedding_dim}D embedding")
+        
+        try:
+            # Genera dati di test
+            sentence_words = [f"word{i}" for i in range(sentence_length)]
+            vocab_info = {"word_to_idx": {}, "idx_to_word": {}}
+            
+            # Parametri ansatz appropriati
+            if embedding_dim == 4:
+                params_v = np.random.random(6) * 0.1  # 2x2 ansatz
+                params_k = np.random.random(6) * 0.1
+            else:
+                n_qubits = int(np.log2(embedding_dim))
+                ansatz_dim = max(1, n_qubits // 2)
+                params_v = np.random.random(ansatz_dim * 3) * 0.1
+                params_k = np.random.random(ansatz_dim * 3) * 0.1
+            
+            # Test adattivo
+            loss = create_adaptive_quantum_circuit(
+                sentence_words=sentence_words,
+                vocab_info=vocab_info,
+                embedding_dim=embedding_dim,
+                params_v=params_v,
+                params_k=params_k,
+                num_layers=2
+            )
+            
+            print(f"   ✅ Loss: {loss:.6f}")
+            
+        except Exception as e:
+            print(f"   ❌ Failed: {e}")
+    
+    # Test configurazione ottimale
+    print(f"\n📊 OPTIMAL CONFIGURATIONS:")
+    
+    test_vocabs = [1000, 5000, 50000]
+    test_lengths = [5, 17, 32]
+    
+    for vocab_size in test_vocabs:
+        for max_length in test_lengths:
+            config = get_optimal_circuit_config(vocab_size, max_length)
+            print(f"   Vocab {vocab_size:,}, MaxLen {max_length}: "
+                  f"{config['suggested_embedding_dim']}D embedding "
+                  f"({config['architecture']} architecture)")
+
+
+if __name__ == "__main__":
+    test_circuit_architecture()
