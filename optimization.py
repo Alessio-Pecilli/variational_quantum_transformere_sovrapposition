@@ -7,7 +7,6 @@ from datetime import datetime
 from itertools import zip_longest
 from scipy.optimize import minimize
 from generalized_quantum_circuits import AdaptiveQuantumCircuitFactory
-from quantum_parallel_units import compute_gradient_batch, create_smart_batches, get_hpc_workers_max
 from quantum_utils import get_params, wrap_angles
 from quantum_circuits import get_circuit_function, create_experimental_circuit
 from visualization import save_loss_plot, save_loss_values_to_file, save_parameters
