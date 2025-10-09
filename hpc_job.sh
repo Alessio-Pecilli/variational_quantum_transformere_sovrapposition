@@ -24,7 +24,7 @@ mkdir -p logs
 
 # Log di debug in tempo reale
 echo " Avvio training parallelo..."
-python main.py > logs/job_${SLURM_JOB_ID}.out 2>&1
+python main_hpc.py > logs/job_${SLURM_JOB_ID}.out 2>&1
 
 EXIT_CODE=$?
 
