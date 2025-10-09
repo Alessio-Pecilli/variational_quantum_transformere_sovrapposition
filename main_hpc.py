@@ -304,12 +304,13 @@ def main():
                 y_start = rng.uniform(-1.0, 1.0, size=n_params)
 
             res = minimize(
-                fun=objective,
-                x0=y_start,
-                method="COBYLA",
-                constraints=constraints,
-                options={"maxiter": MAXITER_PER_RUN, "rhobeg": RHO_BEG, "tol": TOL},
-            )
+    fun=objective,
+    x0=y0,
+    method="COBYLA",
+    constraints=constraints,
+    options={"maxiter": MAXITER_PER_RUN, "rhobeg": RHO_BEG, "tol": TOL, "disp": True},
+)
+
 
             # Valuta loss media globale con i migliori y trovati
             f_star = objective(res.x)
