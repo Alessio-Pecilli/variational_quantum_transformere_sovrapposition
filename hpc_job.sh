@@ -1,36 +1,26 @@
-#!/bin/bash
-#SBATCH --job-name=quantum_beast
-#SBATCH --output=quantum_beast_%j.log
-#SBATCH --error=quantum_beast_%j.log
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --time=10:00:00
+#SBATCH --job-name=quantum_beast_mpi
+#SBATCH --output=logs/quantum_beast_%j.out
+#SBATCH --error=logs/quantum_beast_%j.err
 #SBATCH --partition=boost_usr_prod
 #SBATCH --account=try25_rosati
-#SBATCH --mail-type=ALL
-#SBATCH --mail-user=ale.pecilli@stud.uniroma3.it
-
-echo "=== ⚡ QUANTUM BEAST JOB $SLURM_JOB_ID STARTED at $(date) ==="
+#SBATCH --nodes=4                 # = 4 nodi × 64 core = 256 processi
+#SBATCH --ntasks-per-node=64
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=480G
+#SBATCH --exclusive
 
 module purge
 module load python/3.11.7
 source $WORK/venv_py311/bin/activate
 
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
 
 cd $WORK/variational_quantum_transformere_sovrapposition || exit 1
 mkdir -p logs
 
-# Log di debug in tempo reale
-echo " Avvio training parallelo..."
-python main_hpc.py > logs/job_${SLURM_JOB_ID}.out 2>&1
-
-EXIT_CODE=$?
-
-echo "===  JOB TERMINATO con exit code: $EXIT_CODE ==="
-echo "=== FINE: $(date) ==="
-
-# Invia sempre email finale con log allegato
-mail -s "[Leonardo HPC] Job $SLURM_JOB_ID terminato con codice $EXIT_CODE" \
-     ale.pecilli@stud.uniroma3.it < logs/job_${SLURM_JOB_ID}.out
+echo "🚀 AVVIO TRAINING MPI — $(date)"
+srun python main_hpc.py
+echo "🏁 TRAINING COMPLETATO — $(date)"
