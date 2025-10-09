@@ -23,12 +23,12 @@ cd $WORK/variational_quantum_transformere_sovrapposition || exit 1
 mkdir -p logs
 
 # Log di debug in tempo reale
-echo "🚀 Avvio training parallelo..."
-python hpc_quantum_training_BEAST_MODE.py > logs/job_${SLURM_JOB_ID}.out 2>&1
+echo " Avvio training parallelo..."
+python main.py > logs/job_${SLURM_JOB_ID}.out 2>&1
 
 EXIT_CODE=$?
 
-echo "=== ⚙️ JOB TERMINATO con exit code: $EXIT_CODE ==="
+echo "===  JOB TERMINATO con exit code: $EXIT_CODE ==="
 echo "=== FINE: $(date) ==="
 
 # Invia sempre email finale con log allegato
