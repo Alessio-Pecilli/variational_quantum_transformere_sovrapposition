@@ -1,3 +1,4 @@
+#!/bin/bash
 #SBATCH --job-name=quantum_beast_mpi
 #SBATCH --output=logs/quantum_beast_%j.out
 #SBATCH --error=logs/quantum_beast_%j.err
