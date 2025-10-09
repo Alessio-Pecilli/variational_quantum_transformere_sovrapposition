@@ -6,10 +6,31 @@ import numpy as np
 from datetime import datetime
 from itertools import zip_longest
 from scipy.optimize import minimize
+from generalized_quantum_circuits import AdaptiveQuantumCircuitFactory
 from quantum_parallel_units import compute_gradient_batch, create_smart_batches, get_hpc_workers_max
 from quantum_utils import get_params, wrap_angles
 from quantum_circuits import get_circuit_function, create_experimental_circuit
 from visualization import save_loss_plot, save_loss_values_to_file, save_parameters
+
+def compute_loss_variant(args):
+    """Valuta una variante del circuito con shift diverso."""
+    params, shift_value, states_calculated, U, Z, num_layers, embedding_dim = args
+    builder = AdaptiveQuantumCircuitFactory.create_circuit_builder(embedding_dim, len(states_calculated))
+    
+    return builder.create_generalized_circuit(
+        psi=states_calculated, U=U, Z=Z,
+        params_v=params, params_k=params,
+        num_layers=num_layers
+    )
+
+def adam_update(params, gradients, m, v, lr, beta1, beta2, epsilon, t):
+    """Step singolo di Adam."""
+    m = beta1 * m + (1 - beta1) * gradients
+    v = beta2 * v + (1 - beta2) * (gradients ** 2)
+    m_hat = m / (1 - beta1 ** t)
+    v_hat = v / (1 - beta2 ** t)
+    params = params - lr * m_hat / (np.sqrt(v_hat) + epsilon)
+    return np.mod(params + np.pi, 2 * np.pi) - np.pi, m, v
 
 
 def aggregate_losses(loss_lists):
@@ -33,7 +54,7 @@ def aggregate_losses(loss_lists):
     return media, best, worst
 
 
-def create_loss_function(circuit_function, psi, U, Z, num_layers, dim, param_shape, n_params):
+def create_loss_function(circuit_function, psi, U, Z, num_layers, n_qubit, dim, param_shape, n_params):
     """
     Create a loss function for optimization.
     
@@ -79,7 +100,7 @@ def create_loss_function(circuit_function, psi, U, Z, num_layers, dim, param_sha
     return loss_function
 
 
-def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_params=None, dim=16, opt_maxiter=40, opt_maxfev=60):
+def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, n_qubit, best_params=None, dim=16, opt_maxiter=40, opt_maxfev=60):
     """
     Comprehensive parameter optimization using multiple algorithms.
     
@@ -112,7 +133,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
         return best_params
     
     # Setup parameters
-    n_qubit = 2
+    print("sono in optimize_parameters, n_qubit =", n_qubit)
     param_shape = get_params(n_qubit, num_layers).shape
     n_params = int(np.prod(param_shape))
     
@@ -125,7 +146,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
     aborted_by_user = False
     
     # Create loss function
-    loss_function = create_loss_function(circuit_function, psi, U, Z, num_layers, dim, param_shape, n_params)
+    loss_function = create_loss_function(circuit_function, psi, U, Z, num_layers, n_qubit, dim, param_shape, n_params)
     
     def save_periodically(params_flat, save_every=50):
         """Save parameters periodically during optimization."""
@@ -144,6 +165,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
                 
                 # Initialize parameters
                 if best_params is None:
+                    print("sono in optimize_parameters, best_params è None e n_qubit =", n_qubit)
                     print(f"Random parameter initialization for iteration {iteration}...")
                     params_init = np.concatenate([
                         get_params(n_qubit, num_layers).flatten(),
@@ -240,7 +262,7 @@ def optimize_parameters(max_hours, num_iterations, num_layers, psi, U, Z, best_p
     if best_params is None:
         print("⚡ No optimal parameters found - generating fallback parameters for instant mode")
         # Genera parametri piccoli e casuali come fallback
-        n_qubit = 2
+        print("sono in optimize_parameters, best_params è None e n_qubit =", n_qubit)
         param_shape = get_params(n_qubit, num_layers).shape
         n_params = int(np.prod(param_shape))
         fallback_params = np.concatenate([
@@ -272,7 +294,7 @@ def optimize_experimental_parameters(max_hours, num_iterations, num_layers, psi,
         array: Optimized parameters
     """
     print("\nStarting experimental parameter optimization...\n")
-    
+    print("sono in optimize_experimental_parameters, n_qubit =", n_qubit)
     # Setup parameters
     n_qubit = 2
     param_shape = get_params(n_qubit, num_layers).shape
@@ -446,133 +468,85 @@ def optimize_experimental_parameters(max_hours, num_iterations, num_layers, psi,
             print("Partial results saved. Clean exit.")
     
     return best_params
+
+from multiprocessing import Pool
+import numpy as np
+
+
 def optimize_parameters_parallel(params, shift, states_calculated, U, Z, num_layers,
-                                 embedding_dim, circuit_func, num_workers=None,
+                                 embedding_dim, num_qubits, sentence_length, num_workers=None,
                                  opt_maxiter=150, opt_maxfev=50):
-    """
-    Esegue ottimizzazione parallela dei parametri variationali con ottimizzatore Adam.
-    Ogni worker calcola un batch di gradienti, poi Adam aggiorna i parametri.
-    """
-    import logging
     from multiprocessing import Pool
     from quantum_utils import get_params
+    from config import OPTIMIZATION_CONFIG
+    import logging, time
+    import numpy as np
+
     logger = logging.getLogger(__name__)
 
-    num_params = len(params)
+    # Setup Adam
+    learning_rate = OPTIMIZATION_CONFIG.get('learning_rate', 0.001)
+    beta1, beta2, epsilon = 0.9, 0.999, 1e-8
+    m = np.zeros_like(params)
+    v = np.zeros_like(params)
+    best_params, best_loss = params.copy(), float('inf')
+
     if num_workers is None:
         num_workers = get_hpc_workers_max()
 
-    logger.info(f"🚀 BEAST MODE OPTIMIZATION START")
-    logger.info(f"   Workers: {num_workers}")
-    logger.info(f"   Parametri: {num_params}")
-    logger.info(f"   Max iter: {opt_maxiter}")
+    logger.info(f"🚀 BEAST MODE OPTIMIZATION START - {num_workers} workers")
 
-    # Setup Adam optimizer - usa learning rate da config
-    from config import OPTIMIZATION_CONFIG
-    learning_rate = OPTIMIZATION_CONFIG.get('learning_rate', 0.001)  # Default sicuro
-    beta1, beta2 = 0.9, 0.999
-    epsilon = 1e-8
-    
-    # Adam state variables
-    m = np.zeros(num_params)  # First moment
-    v = np.zeros(num_params)  # Second moment
-    
-    # Current parameters
-    current_params = params.copy()
-    best_params = current_params.copy()
-    best_loss = float('inf')
-    
-    logger.info(f"🧠 Adam optimizer: lr={learning_rate}, β1={beta1}, β2={beta2}")
-
-    # Crea i batch di lavoro una volta
-    batch_list = create_smart_batches(num_params, num_workers)
-    logger.info(f"🧩 Suddivisione in {len(batch_list)} batch")
-
-    # Training loop
+    # 🔁 Training loop
     for iteration in range(opt_maxiter):
         iter_start = time.time()
-        
-        # Calcola loss corrente usando la circuit_function
-        from quantum_circuits import get_circuit_function
-        if circuit_func is None:
-            circuit_func = get_circuit_function(len(states_calculated))
-        
-        # Parametri in forma matriciale - usa get_params per ottenere la forma corretta
-        n_params_single = num_params // 2
-        param_shape = get_params(2, num_layers).shape  # Forma corretta dai quantum_utils
-        
-        pV = current_params[:n_params_single].reshape(param_shape)
-        pK = current_params[n_params_single:].reshape(param_shape)
-        
-        current_loss = circuit_func(states_calculated, U, Z, pV, pK, num_layers, embedding_dim)
-        
-        # 🔥 Esecuzione parallela dei gradienti
-        start_time = time.time()
+
+        # 1️⃣ Genera varianti parallele (es. ±shift)
+        shift_values = [+shift, -shift, +2*shift, -2*shift]
+        variants = [
+            (params, s, states_calculated, U, Z, num_layers, embedding_dim)
+            for s in shift_values
+        ]
+
+        # 2️⃣ Calcola le loss in parallelo
         with Pool(num_workers) as pool:
-            batch_tasks = [
-                (batch, current_params, shift, states_calculated, U, Z, num_layers, embedding_dim, circuit_func)
-                for batch in batch_list
-            ]
-            results = pool.map(compute_gradient_batch, batch_tasks)
+            losses = pool.map(compute_loss_variant, variants)
 
-        # Ricompone i gradienti
-        gradients = np.zeros(num_params)
-        for param_indices, grads in results:
-            for i, grad in zip(param_indices, grads):
-                gradients[i] = grad
+        mean_loss = np.mean(losses)
+        logger.info(f"Iter {iteration:3d}: mean_loss={mean_loss:.6f}")
 
-        grad_time = time.time() - start_time
-        
-        # Gradient clipping per stabilità
-        grad_norm = np.linalg.norm(gradients)
-        max_grad_norm = 1.0  # Clip gradienti troppo grandi
-        if grad_norm > max_grad_norm:
-            gradients = gradients * (max_grad_norm / grad_norm)
-            logger.info(f"   🔧 Gradient clipped: {grad_norm:.6f} -> {max_grad_norm}")
-        
-        # Adam update
-        t = iteration + 1  # Adam timestep (1-indexed)
-        
-        # Update biased first moment estimate
+        # 3️⃣ Calcola gradienti medi in parallelo
+        with Pool(num_workers) as pool:
+            grad_results = pool.map(
+                compute_gradient_batch,
+                [(batch, params, shift, states_calculated, U, Z, num_layers, embedding_dim, None)
+                 for batch in create_smart_batches(len(params), num_workers)]
+            )
+
+        gradients = np.zeros_like(params)
+        for param_indices, grads in grad_results:
+            gradients[param_indices] = grads
+
+        # 4️⃣ Adam update (unico step)
         m = beta1 * m + (1 - beta1) * gradients
-        
-        # Update biased second moment estimate
         v = beta2 * v + (1 - beta2) * (gradients ** 2)
-        
-        # Compute bias-corrected first moment estimate
-        m_hat = m / (1 - beta1 ** t)
-        
-        # Compute bias-corrected second moment estimate
-        v_hat = v / (1 - beta2 ** t)
-        
-        # Update parameters
-        current_params = current_params - learning_rate * m_hat / (np.sqrt(v_hat) + epsilon)
-        
-        # Wrap angles to [-π, π]
-        current_params = np.mod(current_params + np.pi, 2 * np.pi) - np.pi
-        
-        # Update best parameters if loss improved
-        if current_loss < best_loss:
-            best_loss = current_loss
-            best_params = current_params.copy()
-            
-        iter_time = time.time() - iter_start
-        
-        # Logging ogni 10 iterazioni o alla fine
-        if iteration % 10 == 0 or iteration == opt_maxiter - 1:
-            grad_norm = np.linalg.norm(gradients)
-            param_norm = np.linalg.norm(current_params)
-            logger.info(f"   Iter {iteration:3d}: loss={current_loss:.6f} (best={best_loss:.6f}) "
-                       f"grad_norm={grad_norm:.4f} param_norm={param_norm:.4f} "
-                       f"time={iter_time:.2f}s (grad={grad_time:.2f}s)")
-            
-            # Early stopping
-            if grad_norm < 1e-6:
-                logger.info(f"🎯 Convergenza raggiunta alla iterazione {iteration}")
-                break
+        m_hat = m / (1 - beta1 ** (iteration + 1))
+        v_hat = v / (1 - beta2 ** (iteration + 1))
+        params -= learning_rate * m_hat / (np.sqrt(v_hat) + epsilon)
 
-    logger.info(f"✅ BEAST MODE OPTIMIZATION COMPLETE")
-    logger.info(f"   Best loss: {best_loss:.6f}")
-    logger.info(f"   Final param norm: {np.linalg.norm(best_params):.4f}")
+        # Clip
+        params = np.mod(params + np.pi, 2*np.pi) - np.pi
 
+        # 5️⃣ Best tracking
+        if mean_loss < best_loss:
+            best_loss, best_params = mean_loss, params.copy()
+
+        if iteration % 10 == 0:
+            logger.info(f"   best_loss={best_loss:.6f}  grad_norm={np.linalg.norm(gradients):.4f}")
+
+        # Early stop
+        if np.linalg.norm(gradients) < 1e-6:
+            logger.info(f"🎯 Convergenza raggiunta alla iterazione {iteration}")
+            break
+
+    logger.info("✅ Ottimizzazione terminata.")
     return best_params

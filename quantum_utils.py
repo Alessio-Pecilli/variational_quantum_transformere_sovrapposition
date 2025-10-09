@@ -51,6 +51,7 @@ def get_params(num_qubits, num_layers):
     Returns:
         numpy.ndarray: Shaped parameter array
     """
+    print(f"[DEBUG] 🧠 Generating params for num_qubits={num_qubits}, num_layers={num_layers}")
     x = get_param_resolver(num_qubits, num_layers)
     params = get_params_shape(x, num_qubits, num_layers)
     return params
@@ -67,6 +68,7 @@ def get_param_resolver(num_qubits, num_layers):
     Returns:
         dict: Parameter dictionary mapping symbols to values
     """
+    print(f"[DEBUG PARAM RESOLVER] num_qubits={num_qubits}, num_layers={num_layers}")
     num_angles = 12 * num_qubits * num_layers
     angs = np.pi * (2 * np.random.rand(num_angles) - 1)
     params = ParameterVector('θ', num_angles)
@@ -86,6 +88,7 @@ def get_params_shape(param_list, num_qubits, num_layers):
     Returns:
         numpy.ndarray: Reshaped parameter array
     """
+    print(f"[DEBUG SHAPE] num_qubits={num_qubits}, num_layers={num_layers}")
     param_values = np.array(list(param_list.values()))
     x = param_values.reshape(num_layers, 2, num_qubits // 2, 12)
     x_reshaped = x.reshape(num_layers, 2, num_qubits // 2, 4, 3)
@@ -130,7 +133,11 @@ def build_controlled_unitary(U, controls, targets, label, activate_on):
     Returns:
         Gate: Controlled unitary gate
     """
-    gate = UnitaryGate(U, label=label).control(len(controls), ctrl_state=activate_on)
+    if isinstance(activate_on, str):
+        ctrl_state_int = int(activate_on, 2)
+    else:
+        ctrl_state_int = activate_on  # fallback
+    gate = UnitaryGate(U, label=label).control(len(controls), ctrl_state=ctrl_state_int)
     return gate
 
 

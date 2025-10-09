@@ -17,7 +17,6 @@ import visualization
 try:
     from generalized_quantum_circuits import (
         AdaptiveQuantumCircuitFactory, 
-        create_quantum_circuit_for_sentence,
         GeneralizedQuantumCircuitBuilder
     )
     GENERALIZED_AVAILABLE = True
@@ -477,7 +476,7 @@ def create_adaptive_quantum_circuit(sentence_words: List[str], vocab_info: Dict,
         try:
             print(f"🚀 Using Generalized Architecture: {embedding_dim}D embedding, {sentence_length} words")
             
-            return create_quantum_circuit_for_sentence(
+            """return create_quantum_circuit_for_sentence(
                 sentence_words=sentence_words,
                 vocab_info=vocab_info,
                 embedding_dim=embedding_dim,
@@ -485,7 +484,7 @@ def create_adaptive_quantum_circuit(sentence_words: List[str], vocab_info: Dict,
                 params_k=params_k,
                 num_layers=num_layers,
                 **kwargs
-            )
+            )"""
             
         except Exception as e:
             print(f"⚠️ Generalized architecture failed: {e}")
@@ -672,4 +671,4 @@ def test_circuit_architecture():
 
 
 if __name__ == "__main__":
-    test_circuit_architecture()
+    print("main quantum_circuits.py")

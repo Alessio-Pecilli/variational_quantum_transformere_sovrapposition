@@ -22,7 +22,6 @@ from ptb_dataset import PTBDatasetLoader
 from hpc_max_parallel import HPC_ResourceDetector, HPC_MaxParallelOptimizer
 from comprehensive_reporter import ComprehensiveReporter, TrainingMetrics, create_training_metrics
 from optimization import AdamOptimizer
-from quantum_circuits import create_quantum_circuit_for_sentence
 from config import OPTIMIZATION_CONFIG
 
 

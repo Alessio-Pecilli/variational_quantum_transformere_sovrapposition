@@ -19,16 +19,66 @@ class AnsatzBuilder:
             params (array): Parameters for the ansatz layers
             num_layers (int): Number of ansatz layers
         """
+        
         self._num_qubits = int(num_qubits)
         self.qubits = QuantumRegister(self._num_qubits)
         self.unitary_circ = QuantumCircuit(self.qubits)
         
         for layer_idx in range(num_layers):
             self.add_layer(params[layer_idx][0], params[layer_idx][1])
-        
-        
-    
 
+    def get_param_resolver(num_qubits, num_layers):
+        """
+        Create parameter dictionary for optimization.
+        
+        Args:
+            num_qubits (int): Number of qubits
+            num_layers (int): Number of layers
+            
+        Returns:
+            dict: Parameter dictionary mapping symbols to values
+        """
+        print(f"[DEBUG ANSATZ PARAM RESOLVER] num_qubits={num_qubits}, num_layers={num_layers}")
+        num_angles = 12 * num_qubits * num_layers
+        angs = np.pi * (2 * np.random.rand(num_angles) - 1)
+        params = ParameterVector('θ', num_angles)
+        param_dict = dict(zip(params, angs))
+        return param_dict
+
+    def get_params_shape(param_list, num_qubits, num_layers):
+        """
+        Reshape parameter values into the required structure.
+        
+        Args:
+            param_list (dict): Parameter dictionary
+            num_qubits (int): Number of qubits
+            num_layers (int): Number of layers
+            
+        Returns:
+            numpy.ndarray: Reshaped parameter array
+        """
+        print(f"[DEBUG ANSATZ SHAPE] num_qubits={num_qubits}, num_layers={num_layers}")
+        param_values = np.array(list(param_list.values()))
+        x = param_values.reshape(num_layers, 2, num_qubits // 2, 12)
+        x_reshaped = x.reshape(num_layers, 2, num_qubits // 2, 4, 3)
+        
+        return x_reshaped
+    
+    def get_params(num_qubits, num_layers):
+        """
+        Generate parameter array for quantum circuit ansatz.
+        
+        Args:
+            num_qubits (int): Number of qubits
+            num_layers (int): Number of layers in the ansatz
+            
+        Returns:
+            numpy.ndarray: Shaped parameter array
+        """
+        print(f"[DEBUG ANSATZ] 🧠 Generating params for num_qubits={num_qubits}, num_layers={num_layers}")
+        param_dict = AnsatzBuilder.get_param_resolver(num_qubits, num_layers)
+        params = AnsatzBuilder.get_params_shape(param_dict, num_qubits, num_layers)
+        return params
 
     def get_ansatz(self):
         """

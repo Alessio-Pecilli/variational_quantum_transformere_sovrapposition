@@ -60,13 +60,15 @@ def process_sentence_states(states):
     Returns:
         tuple: (states_calculated, U, Z) - processed unitaries
     """
+    
     states_calculated = []
     U = []
     Z = []
     
     for i in range(1, len(states)):
         print("=" * 60)
-        print(f"[ITERATION {i}]")
+        
+        
 
         psi = None
 
@@ -400,6 +402,7 @@ def evaluate_on_hamiltonian_states(num_states, best_params, config):
     except ValueError as e:
         print(f"Error: {e}")
         return None
+    print("Eseguo main superposition con circuit_func: e con 2 qubit", type(circuit_func))
     param_shape = get_params(2, config['num_layers']).shape
     n_params = int(np.prod(param_shape))
     
@@ -456,7 +459,7 @@ def evaluate_on_sentences(sentences, best_params, config):
     print(f"\n{'='*60}")
     print("EVALUATION PHASE")
     print(f"{'='*60}")
-    
+    print("sono nel main superposition con circuit_func: e con 2 qubit")
     enc = Encoding(sentences, embeddingDim=config['embedding_dim'])
     param_shape = get_params(2, config['num_layers']).shape
     n_params = int(np.prod(param_shape))

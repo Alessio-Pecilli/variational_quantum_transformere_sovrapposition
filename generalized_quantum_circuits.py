@@ -34,7 +34,7 @@ class GeneralizedQuantumCircuitBuilder:
         
         self.embedding_dim = embedding_dim
         self.sentence_length = sentence_length
-        
+        print("sentence_length ricevuta: ", sentence_length)
         # Calcola numero qubits target da embedding dimension
         self.n_target_qubits = int(math.ceil(math.log2(embedding_dim*embedding_dim)))
         
@@ -86,7 +86,7 @@ class GeneralizedQuantumCircuitBuilder:
         """
         print(f"🚀 Creazione circuito quantico a {self.n_total_qubits} qubits")
         # Verifica dimensioni input
-        self._validate_input_dimensions(psi, U, Z, params_v, params_k)
+        
         
         # Costruisci ansatz con dimensioni corrette
         ansatz_v = AnsatzBuilder(self.n_target_qubits, params_v, num_layers)
@@ -123,9 +123,7 @@ class GeneralizedQuantumCircuitBuilder:
         print(f"Loss: {loss:.6f} at {datetime.datetime.now().strftime('%H:%M:%S')} "
               f"[{self.embedding_dim}D, {self.sentence_length}W]")
         
-        img_path = f"quantum_attention_circuit_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        circuit_drawer(qc, output="mpl", filename=img_path)
-        Image.open(img_path).show()
+        
 
         return loss
     
@@ -235,39 +233,52 @@ class GeneralizedQuantumCircuitBuilder:
         """Inizializza control qubits in superposition."""
         for qubit in self.control_indices:
             qc.h(qubit)
-        
+            
     def _apply_controlled_initial_states(self, qc: QuantumCircuit, psi: List[np.ndarray]):
         """Applica controlled unitaries per stati iniziali."""
         print("Applico un numero di stati pari a ", len(psi))
+
+        
         for i, state in enumerate(self.control_states):
-            
             if i < len(psi):
                 unitary = psi[i]
+                required_qubits = int(np.log2(unitary.shape[0]))
+
                 unitary_dim = unitary.shape[0]
-                print(f"Unitary dimension for state {state}: {unitary_dim}")
-                
+                #print(f"State {unitary}: Unitary dimension {unitary_dim}")
+                #print(f"Unitary dimension for state {state}: {unitary_dim}")
                 print(f"Applying initial state for control state {state} requiring {self.n_target_qubits} target qubits")
-                # CORREZIONE: Usa abbastanza target qubits per la dimensione unitaria
+
                 if self.n_target_qubits <= len(self.target_indices):
                     target_qubits_for_unitary = self.target_indices[:self.n_target_qubits]
                 else:
-                    # Estendi con qubits aggiuntivi se necessario
-                    target_qubits_for_unitary = self.target_indices + list(range(self.n_total_qubits, self.n_total_qubits + required_qubits - len(self.target_indices)))
-                
+                    target_qubits_for_unitary = self.target_indices + list(range(
+                        self.n_total_qubits,
+                        self.n_total_qubits + required_qubits - len(self.target_indices)
+                    ))
+
                 try:
-                    controlled_unitary = build_controlled_unitary(
-                        unitary, 
-                        self.control_indices, 
-                        target_qubits_for_unitary,  # CORRETTO!
-                        f"ψ_{state}", 
-                        activate_on=state
-                    )
-                    
-                    qubits_list = self.control_indices + target_qubits_for_unitary
-                    qc.compose(controlled_unitary, qubits=qubits_list, inplace=True)
-                    
+                    # ✅ se è un vettore di stato, usa initialize
+                    if unitary.ndim == 1:
+                        num_qubits_needed = int(np.log2(len(unitary)))
+                        qc.initialize(unitary, target_qubits_for_unitary[:num_qubits_needed])
+                        print(f"✅ Stato inizializzato su {num_qubits_needed} qubit")
+                    else:
+                        # ✅ se è una matrice unitaria vera e propria
+                        controlled_unitary = build_controlled_unitary(
+                            unitary,
+                            self.control_indices,
+                            target_qubits_for_unitary,
+                            f"ψ_{state}",
+                            activate_on=state
+                        )
+
+                        qubits_list = self.control_indices + target_qubits_for_unitary
+                        qc.append(controlled_unitary, qargs=qubits_list[:controlled_unitary.num_qubits])
+
                 except Exception as e:
                     print(f"❌ Error: {e}")
+
 
 
     def _apply_variational_ansatz(self, qc: QuantumCircuit, ansatz_v, ansatz_k):
@@ -426,7 +437,7 @@ class AdaptiveQuantumCircuitFactory:
         Returns:
             GeneralizedQuantumCircuitBuilder configurato
         """
-        
+        print(f"🔧 Creazione circuito per embedding dim {embedding_dim} e sentence length {sentence_length}")
         # Valida embedding dimension
         if embedding_dim <= 0 or (embedding_dim & (embedding_dim - 1)) != 0:
             # Trova potenza di 2 più vicina
@@ -623,15 +634,15 @@ def test_quantum_circuit_loss(embedding_dim: int, sentence_idx: int = 0, num_lay
             # Process sentence states
             states = enc.stateVectors[sentence_idx]
             states_calculated, U, Z = process_sentence_states(states)
-            sentence_length = len(states_calculated)
-            
+            sentence_length = len(DEFAULT_SENTENCES[sentence_idx]) - 1
+            print("passo sentence length: ", sentence_length)
             # Create circuit builder
             builder = AdaptiveQuantumCircuitFactory.create_circuit_builder(embedding_dim, sentence_length)
             
             # Generate parameters
             n_target_qubits = builder.n_target_qubits
             ansatz_dim = builder.ansatz_dim
-            
+            print(f"   Target qubits: {n_target_qubits}, Ansatz dim: {ansatz_dim}")
             param_v_5d = get_params(n_target_qubits, ansatz_dim)
             param_k_5d = get_params(n_target_qubits, ansatz_dim)
             
@@ -659,22 +670,4 @@ def test_quantum_circuit_loss(embedding_dim: int, sentence_idx: int = 0, num_lay
 
 
 if __name__ == "__main__":
-        # Test del sistema generalizzato
-    print("🧪 Testing Generalized Quantum Circuit Architecture")
-    print("="*60)
-        
-        # Test diverse embedding dimensions
-    test_configs = [4, 8, 16, 32]
-        
-    for embedding_dim in test_configs:
-        print(f"\n📊 Testing embedding dimension: {embedding_dim}")
-            
-            # Test multiple sentences
-        for sentence_idx in range(0, 2):
-            print(f"{'='*60}")
-            print(f"Sentence {sentence_idx}:")
-                
-            loss = test_quantum_circuit_loss(embedding_dim, sentence_idx)
-            print(f"Final loss: {loss:.6f}")
-        
-    print("\n✅ All tests completed!")
+    print("Esecuzione test quantum_circuits.py [NON FA NULLA]")

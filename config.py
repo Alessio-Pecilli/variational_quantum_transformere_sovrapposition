@@ -5,11 +5,10 @@ Configuration settings for quantum optimization experiments.
 # Optimization settings
 OPTIMIZATION_CONFIG = {
     'num_iterations': 150,     # almeno 100–200 per un training serio
-    'num_layers': 3,
+    'num_layers': 5,
     'max_hours': 4,            # tempo limite in ore
     'embedding_dim': 16,  # Aumentato da 4 a 16 per vocabolario PTB (4,148 parole) - bilanciato
-    'n_qubits': 2,
-    'num_qubits': 2,
+    'num_qubits': 8,
     'opt_maxiter': 300,        # più iterazioni interne per stabilità
     'opt_maxfev': 400,         # più valutazioni loss
     'epochs': 10,
