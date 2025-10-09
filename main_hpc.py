@@ -140,7 +140,7 @@ def get_hpc_workers_max():
         workers = cpu_count()
         source = "CPU_COUNT"
 
-    max_workers = max(1, workers - 1) if workers > 2 else workers
+    max_workers = max(1, workers)
     return max_workers, source, workers
 
 
@@ -218,7 +218,7 @@ def train_with_beast_mode_parallelization(logger):
     # ------------------------------------------------------------
     max_workers, source, total_cpus = get_hpc_workers_max()
     # Limita alla parallelizzazione minima per evitare sovraccarico
-    max_workers = min(max_workers, 2)  # Massimo 2 worker
+    
     logger.info(f"🚀 AVVIO TRAINING BEAST MODE")
     logger.info(f"   Workers: {max_workers}/{total_cpus} (fonte: {source})")
 
