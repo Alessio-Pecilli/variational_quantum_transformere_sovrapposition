@@ -446,7 +446,7 @@ class AdaptiveQuantumCircuitFactory:
             embedding_dim = next_power
         
         # Limiti pratici
-        max_embedding = 256  # 8 qubits target
+        max_embedding = 16  # 4 qubits target
         if embedding_dim > max_embedding:
             print(f"⚠️ Embedding dim {embedding_dim} > {max_embedding}, limitando a {max_embedding}")
             embedding_dim = max_embedding
