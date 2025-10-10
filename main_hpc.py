@@ -118,7 +118,8 @@ def distributed_objective_factory(comm, rank, size, sentences_split, encoding, l
         comm.Bcast([tagbuf, MPI.INT], root=0)
 
         # Broadcast parametri scalati
-        y_scaled = np.asarray(y_scaled, dtype=np.float64)
+        y_scaled = np.ascontiguousarray(y_scaled, dtype=np.float64)
+
         y_dim = np.array([y_scaled.size], dtype=np.int32)
         comm.Bcast([y_dim, MPI.INT], root=0)
         comm.Bcast([y_scaled, MPI.DOUBLE], root=0)
@@ -296,7 +297,7 @@ def main():
         best_f, best_y = np.inf, None
 
         logger.info(f"Inizio ottimizzazione con COBYLA: restarts={RANDOM_RESTARTS}, maxiter={MAXITER_PER_RUN}")
-
+        MAXFUN = max(n_params + 2, 5 * cfg.get('maxiter', 300))
         for r in range(RANDOM_RESTARTS):
             if r == 0:
                 y_start = y0
@@ -305,10 +306,10 @@ def main():
 
             res = minimize(
     fun=objective,
-    x0=y0,
+    x0=y_start,
     method="COBYLA",
     constraints=constraints,
-    options={"maxiter": MAXITER_PER_RUN, "rhobeg": RHO_BEG, "tol": TOL, "disp": True},
+    options={"maxiter": MAXITER_PER_RUN, "rhobeg": RHO_BEG, "tol": TOL, "disp": True, "maxfun": MAXFUN},
 )
 
 
