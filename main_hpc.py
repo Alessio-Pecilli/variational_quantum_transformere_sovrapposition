@@ -287,17 +287,24 @@ def main():
             return 0
 
         # Rank 0: ottimizzazione COBYLA con restarts
+        # Rank 0: ottimizzazione COBYLA con restarts
         constraints = box_constraints_for_unit(n_params)
         RANDOM_RESTARTS = cfg.get('restarts', 3)
-        MAXITER_PER_RUN = cfg.get('maxiter', 300)
+
+        # IMPORTANTE: COBYLA vuole almeno n_params+2 "fun eval" interne.
+        # Qui alziamo maxiter per evitare il warning "Invalid MAXFUN".
+        MAXITER_PER_RUN = max(cfg.get('maxiter', 300), n_params + 2)
+
         RHO_BEG = cfg.get('rhobeg', 0.25)
         TOL = cfg.get('tol', 1e-5)
         rng = np.random.default_rng(cfg.get('seed', 42))
 
         best_f, best_y = np.inf, None
+        logger.info(
+            f"Inizio ottimizzazione con COBYLA: restarts={RANDOM_RESTARTS}, "
+            f"maxiter={MAXITER_PER_RUN} (>= n_params+2={n_params+2})"
+        )
 
-        logger.info(f"Inizio ottimizzazione con COBYLA: restarts={RANDOM_RESTARTS}, maxiter={MAXITER_PER_RUN}")
-        MAXFUN = max(n_params + 2, 5 * cfg.get('maxiter', 300))
         for r in range(RANDOM_RESTARTS):
             if r == 0:
                 y_start = y0
@@ -305,17 +312,20 @@ def main():
                 y_start = rng.uniform(-1.0, 1.0, size=n_params)
 
             res = minimize(
-    fun=objective,
-    x0=y_start,
-    method="COBYLA",
-    constraints=constraints,
-    options={"maxiter": MAXITER_PER_RUN, "rhobeg": RHO_BEG, "tol": TOL, "disp": True, "maxfun": MAXFUN},
-)
-
+                fun=objective,
+                x0=y_start,  # <-- fix: NON usare y0 qui
+                method="COBYLA",
+                constraints=constraints,
+                options={
+                    "maxiter": MAXITER_PER_RUN,
+                    "rhobeg": RHO_BEG,
+                    "tol": TOL,
+                    "disp": True,
+                },
+            )
 
             # Valuta loss media globale con i migliori y trovati
             f_star = objective(res.x)
-
             logger.info(f"[Run {r+1}/{RANDOM_RESTARTS}] f*={f_star:.6f}, iters={res.nit}, success={res.success}")
 
             if f_star < best_f:
