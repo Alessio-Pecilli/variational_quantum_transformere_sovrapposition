@@ -7,7 +7,7 @@ OPTIMIZATION_CONFIG = {
     'num_iterations': 150,     # almeno 100–200 per un training serio
     'num_layers': 5,
     'max_hours': 25,            # tempo limite in ore
-    'embedding_dim': 16,  # Aumentato da 4 a 16 per vocabolario PTB (4,148 parole) - bilanciato
+    'embedding_dim': 4,  # Aumentato da 4 a 16 per vocabolario PTB (4,148 parole) - bilanciato
     'num_qubits': 4,
     'opt_maxiter': 300,        # più iterazioni interne per stabilità
     'opt_maxfev': 400,         # più valutazioni loss
@@ -76,19 +76,46 @@ DATASET_CONFIG = {
 # Default test sentences
 DEFAULT_SENTENCES = [
     "The quick brown",
-    "every day is great right",
-    "The quick brown fox jumps over the lazy dog",
-    "come and play with us today in the sunny beautiful garden now please lets go outside together", 
+    "The quick brown",
+    "The quick brown",
+    "The quick brown"
+    #"every day is great right",
+    #"The quick brown fox jumps over the lazy dog",
+    #"come and play with us today in the sunny beautiful garden now please lets go outside together", 
 ]
 
 # Training sentences
 TRAINING_SENTENCES = [
-    "The cat flies",  
-    "The quick brown fox jumps",
-    "Every morning birds sing songs",
-    "Children happily play in parks",
-    "Beautiful flowers bloom in spring",
-    "Smart students learn new things",
-    "Cats sleep quietly on sofas",
-    "Dogs bark loudly at strangers"
+    "The cat flies",
+    "Quantum computers change everything",
+    "Birds sing softly",
+    "Children play in parks",
+    "Stars shine brightly",
+    "The fox jumps high",
+    "Waves crash on rocks",
+    "Dogs bark loudly",
+    "Flowers bloom in spring",
+    "The moon glows softly",
+    "Bees collect nectar",
+    "Machines learn very fast",
+    "Dreams inspire art",
+    "People build quantum models",
+    "Cars move quickly",
+    "Mountains touch the sky",
+    "Rain falls gently",
+    "Students solve complex problems",
+    "Winds blow strongly",
+    "The river flows calmly",
+    "Trees grow tall",
+    "Humans explore distant planets",
+    "Fire burns bright",
+    "Algorithms optimize neural weights",
+    "Fish swim fast",
+    "Cats chase small mice",
+    "Clouds cover the sun",
+    "Computers process quantum data",
+    "Snow melts slowly",
+    "Scientists study particle physics",
+    "Birds fly high",
+    "The system learns patterns"
 ]

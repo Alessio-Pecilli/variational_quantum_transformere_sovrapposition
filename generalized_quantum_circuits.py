@@ -521,10 +521,10 @@ def process_sentence_states(states):
     states_calculated = []
     U = []
     Z = []
-    print("Inizio a fare gli stati, la lunghezza è ", len(states))
+    #print("Inizio a fare gli stati, la lunghezza è ", len(states))
     for i in range(1, len(states)):
-        print("=" * 60)
-        print(f"[ITERATION {i}]")
+        #print("=" * 60)
+        #print(f"[ITERATION {i}]")
 
         psi = None
 
@@ -532,26 +532,26 @@ def process_sentence_states(states):
         for j in range(i):
             t = states[j]
             norm = np.linalg.norm(t)
-            print(f"  word {j}, norm={norm:.4f}")
+            #print(f"  word {j}, norm={norm:.4f}")
             if norm == 0 or np.isnan(norm):
                 print("   [WARN] Null or ill-defined vector, skipping")
                 continue
             t = t / norm
             kron = np.kron(t, t)
-            print(f"   kron shape={kron.shape}")
+            #print(f"   kron shape={kron.shape}")
             psi = kron if psi is None else psi + kron
 
         # Normalize psi
         norm_psi = np.linalg.norm(psi)
-        print(f"  norm(psi) before normalization = {norm_psi:.4f}")
+        #print(f"  norm(psi) before normalization = {norm_psi:.4f}")
         psi = psi / norm_psi
-        print(f"  psi normalized, shape={psi.shape}, norm={np.linalg.norm(psi):.4f}")
+        #print(f"  psi normalized, shape={psi.shape}, norm={np.linalg.norm(psi):.4f}")
 
         # Target and origin
         x = states[i]
         z = states[i - 1]
-        print(f"  target x = word {i}, shape={x.shape}, norm={np.linalg.norm(x):.4f}")
-        print(f"  origin z = word {i-1}, shape={z.shape}, norm={np.linalg.norm(z):.4f}")
+        #print(f"  target x = word {i}, shape={x.shape}, norm={np.linalg.norm(x):.4f}")
+        ##print(f"  origin z = word {i-1}, shape={z.shape}, norm={np.linalg.norm(z):.4f}")
 
         # Calculate unitaries
         try:
@@ -565,13 +565,13 @@ def process_sentence_states(states):
             continue
 
         # Append to lists
-        print("  Saving triplet (U, Z, psi)")
+        #print("  Saving triplet (U, Z, psi)")
         
         U.append(U_dagger)
         Z.append(Z_dagger)
         states_calculated.append(unitary_psi)
 
-        print("  [OK] Triplet saved in U, Z, states_calculated")
+        #print("  [OK] Triplet saved in U, Z, states_calculated")
     return states_calculated, U, Z
 
 

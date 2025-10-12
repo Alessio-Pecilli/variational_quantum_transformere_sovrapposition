@@ -1,7 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 from mpi4py import MPI
+"""
+try:
+    from mpi4py import MPI
+except Exception:
+    import numpy as np
+
+    class FakeComm:
+        def Get_rank(self): return 0
+        def Get_size(self): return 1
+        def bcast(self, x, root=0): return x
+        def Bcast(self, *a, **k): pass
+        def Allreduce(self, *a, **k): pass
+        def gather(self, x, root=0): return [x]
+        def bcast(self, x, root=0): return x
+
+    class FakeMPI:
+        COMM_WORLD = FakeComm()
+        # tipi fittizi per compatibilità
+        INT = np.int32
+        DOUBLE = np.float64
+        SUM = None
+
+    MPI = FakeMPI()
+"""
+
 import numpy as np
 from pathlib import Path
 from functools import partial
@@ -10,12 +34,11 @@ import logging
 import sys
 import os
 import traceback
-
+from generalized_quantum_circuits import process_sentence_states
 # Import del tuo progetto
 from config import TRAINING_SENTENCES, OPTIMIZATION_CONFIG
 from encoding import Encoding
 from optimization import get_params
-from main_serial import process_sentence_states
 from generalized_quantum_circuits import GeneralizedQuantumCircuitBuilder
 
 from scipy.optimize import minimize
@@ -74,10 +97,10 @@ def loss_for_sentence(sentence_idx, sentence, encoding, params_native, cfg):
     half = params_native.size // 2
     params_v = np.reshape(params_native[:half], params_shape)
     params_k = np.reshape(params_native[half:], params_shape)
-
+    print("frase:", sentence , "è lunga", len(sentence.split()), "parole")
     builder = GeneralizedQuantumCircuitBuilder(
         embedding_dim=cfg['embedding_dim'],
-        sentence_length=len(sentence) - 1
+        sentence_length=len(sentence.split())
     )
 
     loss = builder.create_generalized_circuit(
