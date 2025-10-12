@@ -1,14 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=quantum_beast
+#SBATCH --job-name=quantum_beast_1024
 #SBATCH --output=logs/quantum_beast_%j.out
 #SBATCH --error=logs/quantum_beast_%j.err
 #SBATCH --partition=boost_usr_prod
+#SBATCH --qos=boost_qos_bprod
 #SBATCH --account=try25_rosati
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=16
+#SBATCH --nodes=32
+#SBATCH --ntasks-per-node=32
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=480G
-#SBATCH --time=08:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --exclusive
 #SBATCH --mail-user=ale.pecilli@stud.uniroma3.it
 #SBATCH --mail-type=BEGIN,END,FAIL
@@ -30,13 +31,15 @@ export OPENBLAS_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 
 # ============================================================
-# 🚀 Avvio del training quantistico
+# 🚀 Avvio del training quantistico distribuito
 # ============================================================
 cd $WORK/variational_quantum_transformere_sovrapposition || exit 1
 mkdir -p logs
 
-echo "📦 Environment ready. Starting training..."
-srun python main_hpc.py
+echo "📦 Environment ready. Starting training with 1024 MPI processes..."
+
+# 🔹 Avvio esplicito con MPI
+srun --mpi=pmix_v3 python -m mpi4py main_hpc.py
 
 EXIT_CODE=$?
 echo "🏁 Job terminato con exit code: $EXIT_CODE"

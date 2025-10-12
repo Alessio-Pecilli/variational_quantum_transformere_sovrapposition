@@ -256,6 +256,8 @@ def make_splits_and_encodings(sentences, comm, rank, size, embedding_dim, logger
 
     if rank == 0:
         logger.info(f"Frasi totali: {len(sentences)}; size MPI: {size}")
+    logger.info(f"[Rank {rank}] Frasi locali: {len(local_items)} -> {[s for _, s in local_items]}")
+
     return chunks, local_items, encoding_local
 
 # ---------------------------------------------------------------------
