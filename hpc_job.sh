@@ -48,6 +48,7 @@ mkdir -p logs
 echo "📦 Environment ready. Starting training with 1024 MPI processes..."
 
 # 🔹 Avvio esplicito con MPI
+export PYTHONUNBUFFERED=1
 srun --mpi=pmix_v3 python -m mpi4py main_hpc.py
 EXIT_CODE=$?
 

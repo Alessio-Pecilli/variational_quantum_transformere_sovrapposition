@@ -3,7 +3,9 @@
 from mpi4py import MPI
 import gc
 import psutil
-
+import faulthandler, numpy as np, os, sys
+faulthandler.enable(file=sys.stderr, all_threads=True)
+np.seterr(all='warn')  # non raise, ma avvisa
 """
 try:
     from mpi4py import MPI
@@ -51,18 +53,21 @@ from scipy.optimize import minimize
 # ---------------------------------------------------------------------
 def setup_logging(rank: int):
     logger = logging.getLogger("mpi_beast")
-    logger.setLevel(logging.INFO if rank == 0 else logging.WARNING)
+    logger.setLevel(logging.INFO if rank == 0 else logging.INFO)  # INFO su tutti
 
     if not logger.handlers:
-        fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        ch = logging.StreamHandler(sys.stdout)
-        ch.setFormatter(fmt)
+        fmt = logging.Formatter("%(asctime)s [%(levelname)s] [rank=%(rank)d] %(message)s")
+        class RankFilter(logging.Filter):
+            def filter(self, record): record.rank = rank; return True
+        ch = logging.StreamHandler(sys.stdout); ch.setFormatter(fmt); ch.addFilter(RankFilter())
         logger.addHandler(ch)
-        if rank == 0:
-            fh = logging.FileHandler("hpc_beast_mode_mpi.log", encoding="utf-8")
-            fh.setFormatter(fmt)
-            logger.addHandler(fh)
+
+        Path("logs").mkdir(exist_ok=True)
+        fh = logging.FileHandler(f"logs/rank_{rank}.log", encoding="utf-8")
+        fh.setFormatter(fmt); fh.addFilter(RankFilter())
+        logger.addHandler(fh)
     return logger
+
 
 # ---------------------------------------------------------------------
 # Utility: bounds e scaling
@@ -120,7 +125,13 @@ def loss_for_sentence(sentence_idx, sentence, encoding, params_native, cfg):
     )
     del states, states_calculated, U, Z, builder
     gc.collect()
-    return float(loss)
+    loss_float = float(loss)
+    if not np.isfinite(loss_float):
+        # Penalizza ma NON far saltare niente
+        return 1e6
+    return loss_float
+    
+    
 
 # ---------------------------------------------------------------------
 # Servizio di valutazione distribuita:
@@ -396,13 +407,26 @@ def main():
             logger.error(f"Tipo: {type(e).__name__}, Msg: {e}")
             for line in traceback.format_exc().splitlines():
                 logger.error(line)
-        # Prova a svegliare i worker per non bloccare
-        try:
-            tag = np.array([2], dtype=np.int32)
-            MPI.COMM_WORLD.Bcast([tag, MPI.INT], root=0)
-        except Exception:
-            pass
+            try:
+                tag = np.array([2], dtype=np.int32)
+                MPI.COMM_WORLD.Bcast([tag, MPI.INT], root=0)
+            except Exception:
+                pass
+            exit_local = 1
+        else:
+            exit_local = 0
+
+    # ---- Uscita coerente tra i rank ----
+    comm.Barrier()
+    exit_global = comm.allreduce(exit_local, op=MPI.SUM)
+    if exit_global == 0:
+        logger.info(f"[Rank {rank}] Uscita pulita (exit=0)")
+        return 0
+    else:
+        if rank == 0:
+            logger.error(f"Terminazione globale anomala: {exit_global} rank in errore")
         return 1
+
 
 
 if __name__ == "__main__":
