@@ -3,9 +3,9 @@
 #SBATCH --output=logs/quantum_beast_%j.out
 #SBATCH --error=logs/quantum_beast_%j.err
 #SBATCH --partition=boost_usr_prod
-#SBATCH --qos=boost_qos_bprod
+#SBATCH --qos=boost_qos_lprod
 #SBATCH --account=try25_rosati
-#SBATCH --nodes=32
+#SBATCH --nodes=8
 #SBATCH --ntasks-per-node=32
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=480G
