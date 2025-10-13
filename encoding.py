@@ -1,21 +1,21 @@
 import numpy as np
-# from gensim import downloader as api  # Commented out to avoid dependency issues
 
 class Encoding:
-    def __init__(self, sentences, embeddingDim=16, usePretrained=False):  # Default to False
-        self.sentences = [sentence.split() for sentence in sentences]
+    def __init__(self, sentences=None, embeddingDim=16, usePretrained=False):
+        self.sentences = [s.split() for s in sentences] if sentences else []
         self.embeddingDim = embeddingDim
         self.usePretrained = usePretrained
-        self.vocabulary = self._buildVocabulary()
+        self.vocabulary = self._buildVocabulary(self.sentences)
         self.model = self._loadModel()
         self.embeddingMatrix = self._buildEmbeddingMatrix()
-        self.embeddedSentences = self._applyPositionalEncoding()
-        self.stateVectors = self._normalizeEmbeddings()
 
-    def _buildVocabulary(self):
+    # ============================================================
+    # Core: costruzione dizionario e embedding casuali
+    # ============================================================
+    def _buildVocabulary(self, sentences):
         vocab = {}
         idx = 0
-        for sentence in self.sentences:
+        for sentence in sentences:
             for word in sentence:
                 if word not in vocab:
                     vocab[word] = idx
@@ -24,9 +24,7 @@ class Encoding:
 
     def _loadModel(self):
         if self.usePretrained:
-            # Gensim disabled to avoid dependency issues
             print("Warning: Pretrained models disabled. Using random embeddings.")
-            return None
         return None
 
     def _buildEmbeddingMatrix(self):
@@ -39,6 +37,9 @@ class Encoding:
                 matrix[idx] = np.random.uniform(0, 0.1, self.embeddingDim)
         return matrix
 
+    # ============================================================
+    # Funzioni di codifica singola (no array globali)
+    # ============================================================
     def _positionalEncoding(self, seqLen):
         dModel = self.embeddingDim
         position = np.arange(seqLen)[:, np.newaxis]
@@ -48,82 +49,48 @@ class Encoding:
         pe[:, 1::2] = np.cos(position * divTerm)
         return pe
 
-    def getPhrases(self):
-        return self.sentences
+    def encode_single(self, sentence):
+        """Restituisce embedding + positional encoding normalizzati per UNA sola frase."""
+        words = sentence.split()
+        embeddings = []
+        for word in words:
+            if word not in self.vocabulary:
+                # aggiungi dinamicamente parola nuova
+                idx = len(self.vocabulary)
+                self.vocabulary[word] = idx
+                new_vec = np.random.uniform(0, 0.1, self.embeddingDim)
+                self.embeddingMatrix = np.vstack([self.embeddingMatrix, new_vec])
+            idx = self.vocabulary[word]
+            embeddings.append(self.embeddingMatrix[idx])
 
-    def _applyPositionalEncoding(self):
-        allEncoded = []
-        for sentence in self.sentences:
-            embeddings = []
-            for word in sentence:
-                idx = self.vocabulary[word]
-                embeddings.append(self.embeddingMatrix[idx])
-            embeddings = np.array(embeddings)
-            posEnc = self._positionalEncoding(len(sentence))
-            allEncoded.append(embeddings + posEnc)
-        return allEncoded
+        embeddings = np.array(embeddings)
+        posEnc = self._positionalEncoding(len(words))
+        combined = embeddings + posEnc
 
-    def _normalizeEmbeddings(self):
-        normalizedSentences = []
-        for sentenceEmbed in self.embeddedSentences:
-            normalizedSentence = []
-            for vector in sentenceEmbed:
-                normVector = vector / np.linalg.norm(vector)
-                normalizedSentence.append(normVector)
-            normalizedSentences.append(normalizedSentence)
-        return normalizedSentences
+        # normalizza ogni vettore
+        normalized = [v / np.linalg.norm(v) for v in combined]
+        return normalized
 
-    def localPsi(self, sentenceIdx, wordIdx):
+    def localPsi(self, sentence, wordIdx):
+        """Crea psi per una frase singola (stesso comportamento di prima ma per frase diretta)."""
         dim = self.embeddingDim
+        phrase = self.encode_single(sentence)[:wordIdx]
         psi = np.zeros(dim * dim)
-        phrase = self.stateVectors[sentenceIdx][:wordIdx]
-
         for t in phrase:
             t = t / np.linalg.norm(t)
             psi += np.kron(t, t)
         return psi / np.linalg.norm(psi)
-    
-    def getAllPsi(self, sentenceIdx):
-        """
-        Get all psi vectors for a given sentence.
-        
-        Args:
-            sentenceIdx (int): Index of the sentence
-            
-        Returns:
-            list: List of psi vectors
-        """
-        print(f"Sentence index: {sentenceIdx}")
-        print(f"Number of words in sentence: {len(self.stateVectors[sentenceIdx])}")
-        print(f"Embedding dimension: {self.embeddingDim}")
+
+    def getAllPsi(self, sentence):
+        """Calcola tutti i psi di una frase (equivalente a prima ma lazy)."""
+        phrase = self.encode_single(sentence)
         dim = self.embeddingDim
-        phrase = self.stateVectors[sentenceIdx]
         psiList = []
-    
-        # From word 0 to second-to-last
         for wordIdx in range(0, len(phrase) - 1):
             psi = np.zeros(dim * dim)
-            print(f"[INFO] wordIdx = {wordIdx}")
-            print(f"[INFO] Phrase (embedding): {phrase}")
-
-            # Include up to and including the wordIdx-th word
-            for tIdx, t in enumerate(phrase[:wordIdx + 1]):
-                print(f"[INFO] Original t (index={tIdx}): {t}")
-                norm = np.linalg.norm(t)
-                print(f"[INFO] Norm: {norm}")
-                if norm == 0 or np.isnan(norm):
-                    print(f"[WARN] Null or ill-defined vector at position {tIdx}: {t}")
-                    continue
-                t = t / norm
+            for t in phrase[:wordIdx + 1]:
+                t = t / np.linalg.norm(t)
                 psi += np.kron(t, t)
-
-            psi_norm = np.linalg.norm(psi)
-            if psi_norm == 0 or np.isnan(psi_norm):
-                print(f"[WARN] Null or non-normalizable psi at wordIdx={wordIdx}")
-                continue
-
-            psi /= psi_norm
+            psi /= np.linalg.norm(psi)
             psiList.append(psi)
-
         return psiList
-

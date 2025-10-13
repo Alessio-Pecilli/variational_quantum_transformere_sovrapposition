@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from mpi4py import MPI
+import gc
+import psutil
+
 """
 try:
     from mpi4py import MPI
@@ -87,7 +90,11 @@ def box_constraints_for_unit(y_dim):
 # ---------------------------------------------------------------------
 def loss_for_sentence(sentence_idx, sentence, encoding, params_native, cfg):
     # states, U, Z per la frase
-    states = encoding.stateVectors[sentence_idx]
+    
+    mem = psutil.Process().memory_info().rss / 1024**3
+    print(f"[Rank {MPI.COMM_WORLD.Get_rank()}] Memoria attuale: {mem:.2f} GB")
+
+    states = encoding.encode_single(sentence)
     states_calculated, U, Z = process_sentence_states(states)
 
     num_layers = cfg['num_layers']
@@ -111,6 +118,8 @@ def loss_for_sentence(sentence_idx, sentence, encoding, params_native, cfg):
         params_k=params_k,
         num_layers=num_layers
     )
+    del states, states_calculated, U, Z, builder
+    gc.collect()
     return float(loss)
 
 # ---------------------------------------------------------------------
@@ -179,6 +188,9 @@ def distributed_objective_factory(comm, rank, size, sentences_split, encoding, l
                 # Log solo su rank 0 per non inondare
                 if rank == 0:
                     logger.warning(f"Errore loss su frase globale {global_idx}: {e}")
+            finally:
+                gc.collect()
+        
 
         # Allreduce su [sum, count]
         send_buf[0] = local_sum
