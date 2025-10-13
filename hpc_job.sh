@@ -22,9 +22,18 @@ echo "=== 🚀 JOB $SLURM_JOB_ID STARTED at $(date) on $(hostname) ==="
 module purge
 module load openmpi/4.1.6--gcc--12.2.0
 module load python/3.11.7
-source $WORK/venv_py311/bin/activate
 
-# Disattiva thread multipli nei backend numerici
+# 🧠 Attiva o crea la virtualenv automaticamente
+if [ ! -d "$WORK/venv_py311" ]; then
+    echo "⚙️  Creo nuova virtualenv..."
+    python -m venv $WORK/venv_py311
+    source $WORK/venv_py311/bin/activate
+    pip install --no-cache-dir numpy scipy mpi4py psutil
+else
+    source $WORK/venv_py311/bin/activate
+fi
+
+# 🔒 Disattiva multithreading dei backend numerici
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
@@ -40,7 +49,13 @@ echo "📦 Environment ready. Starting training with 1024 MPI processes..."
 
 # 🔹 Avvio esplicito con MPI
 srun --mpi=pmix_v3 python -m mpi4py main_hpc.py
-
 EXIT_CODE=$?
-echo "🏁 Job terminato con exit code: $EXIT_CODE"
-echo "=== FINE JOB $(date) ==="
+
+if [ $EXIT_CODE -ne 0 ]; then
+  echo "❌ Job fallito con exit code $EXIT_CODE"
+  exit $EXIT_CODE
+else
+  echo "✅ Job completato con successo (exit code 0)"
+fi
+
+echo "=== 🏁 JOB $SLURM_JOB_ID FINISHED at $(date) ==="
