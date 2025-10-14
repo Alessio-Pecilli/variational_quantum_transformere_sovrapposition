@@ -374,7 +374,12 @@ def main():
 
             # Valuta loss media globale con i migliori y trovati
             f_star = objective(res.x)
-            logger.info(f"[Run {r+1}/{RANDOM_RESTARTS}] f*={f_star:.6f}, iters={res.nit}, success={res.success}")
+            try:
+                iters = getattr(res, "nit", "N/A")
+                succ  = getattr(res, "success", "N/A")
+                logger.info(f"[Run {r+1}/{RANDOM_RESTARTS}] f*={f_star:.6f}, iters={iters}, success={succ}")
+            except Exception as e:
+                logger.warning(f"[Run {r+1}] Warning nel logging risultati COBYLA: {e}")
 
             if f_star < best_f:
                 best_f = f_star
@@ -400,7 +405,7 @@ def main():
         logger.info(f"Parametri salvati in theta_finali_native_{ts}.npy")
 
         return 0
-
+    
     except Exception as e:
         if rank == 0:
             logger.error("Errore critico durante il training")
@@ -416,6 +421,13 @@ def main():
         else:
             exit_local = 0
 
+    finally:
+        try:
+            comm.Barrier()
+            if rank == 0:
+                stop_workers()
+        except Exception:
+            pass
     # ---- Uscita coerente tra i rank ----
     comm.Barrier()
     exit_global = comm.allreduce(exit_local, op=MPI.SUM)
